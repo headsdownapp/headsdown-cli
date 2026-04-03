@@ -21,6 +21,7 @@ pub async fn run(
     files: Option<i32>,
     minutes: Option<i32>,
     model: Option<String>,
+    json: bool,
 ) -> Result<()> {
     let token = auth::require_token()?;
     let client = GraphQLClient::new(api_url, &token);
@@ -45,6 +46,11 @@ pub async fn run(
     let data = client
         .execute(SUBMIT_PROPOSAL_MUTATION, Some(variables))
         .await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&data["submitProposal"])?);
+        return Ok(());
+    }
 
     let verdict = &data["submitProposal"];
     let decision = verdict["decision"]

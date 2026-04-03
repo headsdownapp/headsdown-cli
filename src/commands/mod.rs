@@ -1,5 +1,12 @@
+pub mod alias;
 pub mod auth;
+pub mod doctor;
+pub mod hooks;
 pub mod mode;
 pub mod presets;
 pub mod status;
+pub mod telemetry_cmd;
+pub mod update;
 pub mod verdict;
+pub mod watch;
+pub mod whoami;

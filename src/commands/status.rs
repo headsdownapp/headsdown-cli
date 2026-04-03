@@ -27,11 +27,16 @@ query {
 }
 "#;
 
-pub async fn run(api_url: &str) -> Result<()> {
+pub async fn run(api_url: &str, json: bool) -> Result<()> {
     let token = auth::require_token()?;
     let client = GraphQLClient::new(api_url, &token);
 
     let data = client.execute(STATUS_QUERY, None).await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&data)?);
+        return Ok(());
+    }
 
     let contract = &data["activeContract"];
     let calendar = &data["calendar"];

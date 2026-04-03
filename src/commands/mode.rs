@@ -124,7 +124,7 @@ fn parse_until_time(input: &str) -> Option<i64> {
     Some(minutes)
 }
 
-pub async fn run(api_url: &str, mode: &str, duration: Option<String>) -> Result<()> {
+pub async fn run(api_url: &str, mode: &str, duration: Option<String>, json: bool) -> Result<()> {
     let token = auth::require_token()?;
     let client = GraphQLClient::new(api_url, &token);
 
@@ -148,6 +148,11 @@ pub async fn run(api_url: &str, mode: &str, duration: Option<String>) -> Result<
     let data = client
         .execute(CREATE_CONTRACT_MUTATION, Some(variables))
         .await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&data["createContract"])?);
+        return Ok(());
+    }
 
     let contract = &data["createContract"];
     let actual_mode = contract["mode"].as_str().unwrap_or(mode).to_uppercase();

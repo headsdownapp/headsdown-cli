@@ -30,11 +30,16 @@ mutation ApplyPreset($id: ID!) {
 }
 "#;
 
-pub async fn run(api_url: &str) -> Result<()> {
+pub async fn run(api_url: &str, json: bool) -> Result<()> {
     let token = auth::require_token()?;
     let client = GraphQLClient::new(api_url, &token);
 
     let data = client.execute(PRESETS_QUERY, None).await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&data["presets"])?);
+        return Ok(());
+    }
 
     let presets = data["presets"]
         .as_array()
@@ -105,7 +110,7 @@ pub async fn run(api_url: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn activate(api_url: &str, name_or_id: &str) -> Result<()> {
+pub async fn activate(api_url: &str, name_or_id: &str, json: bool) -> Result<()> {
     let token = auth::require_token()?;
     let client = GraphQLClient::new(api_url, &token);
 
@@ -141,6 +146,11 @@ pub async fn activate(api_url: &str, name_or_id: &str) -> Result<()> {
     let data = client
         .execute(APPLY_PRESET_MUTATION, Some(variables))
         .await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&data["applyPreset"])?);
+        return Ok(());
+    }
 
     let contract = &data["applyPreset"];
     let mode = contract["mode"]

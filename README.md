@@ -43,6 +43,9 @@ hd verdict "refactor auth module" --files 5 --minutes 30
 # List and activate presets
 hd presets
 hd preset "Focusing"
+
+# Live dashboard with countdown
+hd watch
 ```
 
 ## Commands
@@ -51,6 +54,7 @@ hd preset "Focusing"
 |---------|-------------|
 | `hd auth` | Authenticate via Device Flow (browser-based) |
 | `hd status` | Show your current availability |
+| `hd whoami` | Show your authenticated identity |
 | `hd busy [duration]` | Set mode to busy |
 | `hd online` | Set mode to online |
 | `hd offline` | Set mode to offline |
@@ -58,6 +62,16 @@ hd preset "Focusing"
 | `hd verdict "desc"` | Submit a task proposal and get a verdict |
 | `hd presets` | List available presets |
 | `hd preset "name"` | Activate a preset |
+| `hd watch` | Live-updating status dashboard |
+| `hd doctor` | Check CLI health and connectivity |
+| `hd update` | Self-update to the latest version |
+| `hd hook install` | Install git hooks (auto-busy on branch switch) |
+| `hd hook uninstall` | Remove git hooks |
+| `hd hook status` | Show git hook status |
+| `hd alias set NAME CMD` | Create a command alias |
+| `hd alias remove NAME` | Remove an alias |
+| `hd alias list` | List all aliases |
+| `hd telemetry on\|off` | Toggle anonymous usage telemetry |
 | `hd completions <shell>` | Generate shell completions (bash, zsh, fish) |
 
 ## Duration Formats
@@ -71,6 +85,43 @@ Durations accept human-readable formats:
 - `90` (90 minutes, bare number)
 - `until 5pm` or `until 3:30pm` (until a specific time)
 
+## JSON Output
+
+Every command supports `--json` for machine-readable output:
+
+```sh
+hd status --json | jq .activeContract.mode
+hd presets --json | jq '.[].name'
+hd doctor --json
+```
+
+## Aliases
+
+Create shortcuts for common workflows:
+
+```sh
+hd alias set focus "busy 2h"
+hd alias set standup "online"
+hd alias set deep "busy 4h"
+
+# Now use them:
+hd focus
+hd standup
+```
+
+## Git Hooks
+
+Auto-set your availability based on git activity:
+
+```sh
+# Install hooks in the current repo
+hd hook install
+
+# What gets installed:
+# - post-checkout: auto-sets busy when switching branches
+# - pre-push: auto-sets online after pushing
+```
+
 ## Authentication
 
 The CLI uses [Device Flow](https://www.rfc-editor.org/rfc/rfc8628) authentication:
@@ -82,6 +133,37 @@ The CLI uses [Device Flow](https://www.rfc-editor.org/rfc/rfc8628) authenticatio
 5. The CLI stores your API key locally
 
 Credentials are stored at `~/.config/headsdown/credentials` (XDG-compliant, respects `$XDG_CONFIG_HOME`).
+
+## Configuration
+
+Config file at `~/.config/headsdown/config.toml`:
+
+```toml
+# Default API URL
+api_url = "https://headsdown.app"
+
+# Default duration for mode commands (minutes)
+default_duration = 120
+
+# Default AI model for verdict command
+default_model = "claude-sonnet-4"
+
+[telemetry]
+enabled = false
+
+[aliases]
+focus = "busy 2h"
+standup = "online"
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HEADSDOWN_API_URL` | API base URL | `https://headsdown.app` |
+| `XDG_CONFIG_HOME` | Config directory base | `~/.config` |
+| `NO_COLOR` | Disable colored output | unset |
+| `FORCE_COLOR` | Force colored output (e.g. in CI) | unset |
 
 ## Shell Completions
 
@@ -98,12 +180,15 @@ hd completions zsh > ~/.zfunc/_hd
 hd completions fish > ~/.config/fish/completions/hd.fish
 ```
 
-## Configuration
+## Troubleshooting
 
-| Environment Variable | Description | Default |
-|---------------------|-------------|---------|
-| `HEADSDOWN_API_URL` | API base URL | `https://headsdown.app` |
-| `XDG_CONFIG_HOME` | Config directory base | `~/.config` |
+Run the built-in diagnostic:
+
+```sh
+hd doctor
+```
+
+This checks: CLI version, config directory, credentials, API connectivity, authentication validity, and platform info.
 
 ## License
 
