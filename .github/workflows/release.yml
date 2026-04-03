@@ -78,3 +78,102 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release artifacts for SHA256
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BASE="https://github.com/headsdownapp/headsdown-cli/releases/download/v${VERSION}"
+          mkdir -p artifacts
+          for artifact in hd-aarch64-darwin hd-x86_64-darwin hd-aarch64-linux hd-x86_64-linux; do
+            curl -fsSL -o "artifacts/${artifact}" "${BASE}/${artifact}"
+          done
+
+      - name: Compute SHA256 hashes
+        id: sha
+        run: |
+          echo "aarch64_darwin=$(shasum -a 256 artifacts/hd-aarch64-darwin | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "x86_64_darwin=$(shasum -a 256 artifacts/hd-x86_64-darwin | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "aarch64_linux=$(shasum -a 256 artifacts/hd-aarch64-linux | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "x86_64_linux=$(shasum -a 256 artifacts/hd-x86_64-linux | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: headsdownapp/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cat > homebrew-tap/Formula/hd.rb << 'FORMULA'
+          # This formula is auto-updated by the headsdown-cli release workflow.
+          # Do not edit manually.
+
+          class Hd < Formula
+            desc "CLI tool for HeadsDown availability management"
+            homepage "https://github.com/headsdownapp/headsdown-cli"
+            version "VERSION_PLACEHOLDER"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/headsdownapp/headsdown-cli/releases/download/v#{version}/hd-aarch64-darwin"
+                sha256 "SHA_AARCH64_DARWIN"
+              end
+
+              on_intel do
+                url "https://github.com/headsdownapp/headsdown-cli/releases/download/v#{version}/hd-x86_64-darwin"
+                sha256 "SHA_X86_64_DARWIN"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/headsdownapp/headsdown-cli/releases/download/v#{version}/hd-aarch64-linux"
+                sha256 "SHA_AARCH64_LINUX"
+              end
+
+              on_intel do
+                url "https://github.com/headsdownapp/headsdown-cli/releases/download/v#{version}/hd-x86_64-linux"
+                sha256 "SHA_X86_64_LINUX"
+              end
+            end
+
+            def install
+              binary = Dir["hd-*"].first || "hd"
+              bin.install binary => "hd"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/hd --version")
+            end
+          end
+          FORMULA
+
+          # Replace placeholders with actual values
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" homebrew-tap/Formula/hd.rb
+          sed -i "s/SHA_AARCH64_DARWIN/${{ steps.sha.outputs.aarch64_darwin }}/" homebrew-tap/Formula/hd.rb
+          sed -i "s/SHA_X86_64_DARWIN/${{ steps.sha.outputs.x86_64_darwin }}/" homebrew-tap/Formula/hd.rb
+          sed -i "s/SHA_AARCH64_LINUX/${{ steps.sha.outputs.aarch64_linux }}/" homebrew-tap/Formula/hd.rb
+          sed -i "s/SHA_X86_64_LINUX/${{ steps.sha.outputs.x86_64_linux }}/" homebrew-tap/Formula/hd.rb
+
+          # Fix indentation (heredoc adds leading spaces)
+          sed -i 's/^          //' homebrew-tap/Formula/hd.rb
+
+      - name: Commit and push formula
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/hd.rb
+          git commit -m "Update hd to v${{ steps.version.outputs.version }}"
+          git push
