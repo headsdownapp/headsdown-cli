@@ -1,5 +1,4 @@
 use anyhow::Result;
-use owo_colors::OwoColorize;
 
 use crate::auth;
 use crate::client::GraphQLClient;
@@ -49,7 +48,7 @@ pub async fn run(api_url: &str) -> Result<()> {
     }
 
     println!();
-    println!("  {}", "Available Presets".bold());
+    println!("  {}", format::styled_bold("Available Presets"));
     println!();
 
     for preset in presets {
@@ -66,7 +65,11 @@ pub async fn run(api_url: &str) -> Result<()> {
             name.to_string()
         };
 
-        print!("  {} {}", "•".dimmed(), display_name.bold());
+        print!(
+            "  {} {}",
+            format::styled_dimmed("•"),
+            format::styled_bold(&display_name)
+        );
 
         // Show duration if set
         if let Some(duration) = preset["duration"].as_i64() {
@@ -87,15 +90,15 @@ pub async fn run(api_url: &str) -> Result<()> {
             details.push(format!("\"{}\"", status_text));
         }
         if !details.is_empty() {
-            println!("    {}", details.join(" · ").dimmed());
+            println!("    {}", format::styled_dimmed(&details.join(" · ")));
         }
     }
 
     println!();
     println!(
         "  {} {}",
-        "Tip:".dimmed(),
-        "Activate with: hd preset \"Preset Name\"".dimmed()
+        format::styled_dimmed("Tip:"),
+        format::styled_dimmed("Activate with: hd preset \"Preset Name\"")
     );
     println!();
 
@@ -147,9 +150,9 @@ pub async fn activate(api_url: &str, name_or_id: &str) -> Result<()> {
 
     println!();
     print!(
-        "  {} Applied preset \"{}\" — now {}",
-        "✓".green().bold(),
-        preset_name.bold(),
+        "  {} Applied preset \"{}\" - now {}",
+        format::styled_green_bold("✓"),
+        format::styled_bold(preset_name),
         format::color_mode(&mode)
     );
 

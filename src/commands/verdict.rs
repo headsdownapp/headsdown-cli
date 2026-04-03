@@ -1,5 +1,4 @@
 use anyhow::Result;
-use owo_colors::OwoColorize;
 
 use crate::auth;
 use crate::client::GraphQLClient;
@@ -29,7 +28,7 @@ pub async fn run(
     let mut input = serde_json::json!({
         "description": description,
         "agentRef": "headsdown-cli",
-        "sourceRef": format!("cli:{}", std::process::id()),
+        "sourceRef": "cli",
     });
 
     if let Some(f) = files {
@@ -57,23 +56,23 @@ pub async fn run(
     println!();
     println!(
         "  {} {}",
-        "Verdict:".dimmed(),
+        format::styled_dimmed("Verdict:"),
         format::color_verdict(&decision)
     );
     println!();
-    println!("  {} {}", "Reason:".dimmed(), reason);
+    println!("  {} {}", format::styled_dimmed("Reason:"), reason);
 
     // Show the proposal details
     println!();
-    println!("  {} {}", "Task:".dimmed(), description);
+    println!("  {} {}", format::styled_dimmed("Task:"), description);
     if let Some(f) = files {
-        println!("  {} ~{} files", "Scope:".dimmed(), f);
+        println!("  {} ~{} files", format::styled_dimmed("Scope:"), f);
     }
     if let Some(m) = minutes {
-        println!("  {} ~{} minutes", "Estimate:".dimmed(), m);
+        println!("  {} ~{} minutes", format::styled_dimmed("Estimate:"), m);
     }
     if let Some(ref model_name) = model {
-        println!("  {} {}", "Model:".dimmed(), model_name);
+        println!("  {} {}", format::styled_dimmed("Model:"), model_name);
     }
 
     println!();

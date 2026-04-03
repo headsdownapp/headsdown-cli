@@ -1,6 +1,5 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use owo_colors::OwoColorize;
 
 use crate::auth;
 use crate::client::GraphQLClient;
@@ -45,17 +44,25 @@ pub async fn run(api_url: &str) -> Result<()> {
         .to_uppercase();
 
     println!();
-    println!("  {} {}", "●".bold(), name.bold());
+    println!(
+        "  {} {}",
+        format::styled_bold("●"),
+        format::styled_bold(name)
+    );
     println!();
-    println!("  {} {}", "Mode:".dimmed(), format::color_mode(&mode));
+    println!(
+        "  {} {}",
+        format::styled_dimmed("Mode:"),
+        format::color_mode(&mode)
+    );
 
     // Status text
     if let Some(emoji) = contract["statusEmoji"].as_str() {
         if let Some(text) = contract["statusText"].as_str() {
-            println!("  {} {} {}", "Status:".dimmed(), emoji, text);
+            println!("  {} {} {}", format::styled_dimmed("Status:"), emoji, text);
         }
     } else if let Some(text) = contract["statusText"].as_str() {
-        println!("  {} {}", "Status:".dimmed(), text);
+        println!("  {} {}", format::styled_dimmed("Status:"), text);
     }
 
     // Duration / expires at
@@ -68,8 +75,8 @@ pub async fn run(api_url: &str) -> Result<()> {
                 let formatted = format::format_duration(remaining.num_minutes());
                 println!(
                     "  {} {} remaining (until {})",
-                    "Time:".dimmed(),
-                    formatted.bold(),
+                    format::styled_dimmed("Time:"),
+                    format::styled_bold(&formatted),
                     expires_at.format("%l:%M %p").to_string().trim()
                 );
             }
@@ -78,17 +85,25 @@ pub async fn run(api_url: &str) -> Result<()> {
 
     // Work hours info
     if let Some(true) = calendar["offHours"].as_bool() {
-        println!("  {} {}", "Schedule:".dimmed(), "Off hours".dimmed());
+        println!(
+            "  {} {}",
+            format::styled_dimmed("Schedule:"),
+            format::styled_dimmed("Off hours")
+        );
     } else if let Some(day) = calendar["day"].as_str() {
         println!(
             "  {} Work hours ({})",
-            "Schedule:".dimmed(),
+            format::styled_dimmed("Schedule:"),
             capitalize(day)
         );
     }
 
     if contract["lock"].as_bool() == Some(true) {
-        println!("  {} {}", "Lock:".dimmed(), "🔒 Locked".yellow());
+        println!(
+            "  {} {}",
+            format::styled_dimmed("Lock:"),
+            format::styled_yellow_bold("🔒 Locked")
+        );
     }
 
     println!();

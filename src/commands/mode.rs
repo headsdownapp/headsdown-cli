@@ -1,6 +1,5 @@
 use anyhow::{bail, Result};
 use chrono::{DateTime, Local, NaiveTime, Utc};
-use owo_colors::OwoColorize;
 
 use crate::auth;
 use crate::client::GraphQLClient;
@@ -30,7 +29,7 @@ fn parse_duration(input: &str) -> Result<i64> {
             return Ok(minutes);
         }
         bail!(
-            "Could not parse time '{}'. Try formats like: until 5pm, until 3:30pm",
+            "Time '{}' has already passed. Try a future time like: until 5pm, until 3:30pm",
             time_str
         );
     }
@@ -119,7 +118,7 @@ fn parse_until_time(input: &str) -> Option<i64> {
     let minutes = diff.num_minutes();
 
     if minutes <= 0 {
-        return None; // Target time is in the past
+        return None; // target time is in the past
     }
 
     Some(minutes)
@@ -156,7 +155,7 @@ pub async fn run(api_url: &str, mode: &str, duration: Option<String>) -> Result<
     println!();
     print!(
         "  {} Set to {}",
-        "✓".green().bold(),
+        format::styled_green_bold("✓"),
         format::color_mode(&actual_mode)
     );
 

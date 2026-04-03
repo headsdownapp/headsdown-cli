@@ -68,6 +68,6 @@ pub fn store_token(token: &str) -> Result<()> {
 pub fn require_token() -> Result<String> {
     match load_token()? {
         Some(token) => Ok(token),
-        None => bail!("Not authenticated. Run `hd auth` first."),
+        None => bail!("Not authenticated. Run `hd auth` first"),
     }
 }

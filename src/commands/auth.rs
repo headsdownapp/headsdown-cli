@@ -1,10 +1,10 @@
 use anyhow::{bail, Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use owo_colors::OwoColorize;
 use serde::Deserialize;
 use std::time::Duration;
 
 use crate::auth;
+use crate::format;
 
 #[derive(Deserialize)]
 struct DeviceAuthResponse {
@@ -39,11 +39,17 @@ pub async fn run(api_url: &str) -> Result<()> {
                 println!();
                 println!(
                     "  {} Authenticated as {} ({})",
-                    "✓".green().bold(),
-                    name.bold(),
-                    email.dimmed()
+                    format::styled_green_bold("✓"),
+                    format::styled_bold(name),
+                    format::styled_dimmed(email)
                 );
                 println!();
+
+                // Skip re-auth prompt when stdin is not a TTY (e.g. piped input, CI)
+                if !atty::is(atty::Stream::Stdin) {
+                    return Ok(());
+                }
+
                 print!("  Re-authenticate? [y/N] ");
 
                 use std::io::{self, Write};
@@ -59,7 +65,7 @@ pub async fn run(api_url: &str) -> Result<()> {
             Err(_) => {
                 println!(
                     "  {} Stored credentials are invalid. Starting fresh authentication...",
-                    "!".yellow().bold()
+                    format::styled_yellow_bold("!")
                 );
                 println!();
             }
@@ -87,13 +93,22 @@ pub async fn run(api_url: &str) -> Result<()> {
 
     // Step 2: Display the user code and verification URL
     println!();
-    println!("  {} Open this URL in your browser:", "→".cyan().bold());
+    println!(
+        "  {} Open this URL in your browser:",
+        format::styled_cyan_bold("→")
+    );
     println!();
-    println!("    {}", device_auth.verification_uri.cyan().underline());
+    println!(
+        "    {}",
+        format::styled_cyan_underline(&device_auth.verification_uri)
+    );
     println!();
-    println!("  {} Enter this code when prompted:", "→".cyan().bold());
+    println!(
+        "  {} Enter this code when prompted:",
+        format::styled_cyan_bold("→")
+    );
     println!();
-    println!("    {}", device_auth.user_code.bold().yellow());
+    println!("    {}", format::styled_yellow_bold(&device_auth.user_code));
     println!();
 
     // Step 3: Poll for approval with a spinner
@@ -115,7 +130,7 @@ pub async fn run(api_url: &str) -> Result<()> {
 
         if tokio::time::Instant::now() > deadline {
             spinner.finish_and_clear();
-            bail!("Authorization timed out. Please run `hd auth` again.");
+            bail!("Authorization timed out. Run `hd auth` to try again.");
         }
 
         let resp = http
@@ -151,7 +166,11 @@ pub async fn run(api_url: &str) -> Result<()> {
                 Err(_) => "Unknown".to_string(),
             };
 
-            println!("  {} Authenticated as {}", "✓".green().bold(), name.bold());
+            println!(
+                "  {} Authenticated as {}",
+                format::styled_green_bold("✓"),
+                format::styled_bold(&name)
+            );
             println!();
             return Ok(());
         }
@@ -168,7 +187,7 @@ pub async fn run(api_url: &str) -> Result<()> {
             }
             Some("expired_token") => {
                 spinner.finish_and_clear();
-                bail!("Device code expired. Please run `hd auth` again.");
+                bail!("Device code expired. Run `hd auth` to try again.");
             }
             Some(err) => {
                 spinner.finish_and_clear();
