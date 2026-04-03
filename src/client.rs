@@ -69,6 +69,7 @@ impl GraphQLClient {
                     if msg.contains("Authentication failed")
                         || msg.contains("GraphQL error")
                         || msg.contains("API request failed (HTTP 4")
+                        || msg.contains("No data returned")
                     {
                         return Err(e);
                     }
@@ -119,5 +120,126 @@ impl GraphQLClient {
         gql_response
             .data
             .ok_or_else(|| anyhow::anyhow!("No data returned from API"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    async fn setup() -> (MockServer, GraphQLClient) {
+        let server = MockServer::start().await;
+        let client = GraphQLClient::new(&server.uri(), "hd_test_token");
+        (server, client)
+    }
+
+    #[tokio::test]
+    async fn successful_request_returns_data() {
+        let (server, client) = setup().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {"profile": {"name": "Alice"}}
+            })))
+            .mount(&server)
+            .await;
+
+        let data = client
+            .execute("query { profile { name } }", None)
+            .await
+            .unwrap();
+        assert_eq!(data["profile"]["name"], "Alice");
+    }
+
+    #[tokio::test]
+    async fn retries_on_server_error_then_succeeds() {
+        let (server, client) = setup().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("Internal Server Error"))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {"ok": true}
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let data = client.execute("query { ok }", None).await.unwrap();
+        assert_eq!(data["ok"], true);
+    }
+
+    #[tokio::test]
+    async fn gives_up_after_max_retries() {
+        let (server, client) = setup().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("down"))
+            .expect(4) // 1 initial + 3 retries
+            .mount(&server)
+            .await;
+
+        let err = client.execute("query { fail }", None).await.unwrap_err();
+        assert!(err.to_string().contains("Server error"));
+    }
+
+    #[tokio::test]
+    async fn does_not_retry_on_401() {
+        let (server, client) = setup().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let err = client.execute("query { fail }", None).await.unwrap_err();
+        assert!(err.to_string().contains("Authentication failed"));
+    }
+
+    #[tokio::test]
+    async fn does_not_retry_on_graphql_error() {
+        let (server, client) = setup().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "errors": [{"message": "Not found"}]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let err = client.execute("query { fail }", None).await.unwrap_err();
+        assert!(err.to_string().contains("GraphQL error"));
+    }
+
+    #[tokio::test]
+    async fn returns_error_when_no_data() {
+        let (server, client) = setup().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": null
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let err = client.execute("query { fail }", None).await.unwrap_err();
+        assert!(err.to_string().contains("No data returned"));
     }
 }

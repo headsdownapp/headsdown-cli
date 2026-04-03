@@ -101,3 +101,76 @@ pub fn list(json: bool) -> Result<()> {
     println!();
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    fn with_temp_config<F: FnOnce()>(f: F) {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", dir.path());
+        f();
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
+
+    #[test]
+    #[serial]
+    fn set_rejects_builtin_commands() {
+        with_temp_config(|| {
+            for builtin in &["auth", "status", "help", "alias", "busy", "watch"] {
+                let result = set(builtin, "something");
+                assert!(result.is_err(), "Expected error for builtin '{}'", builtin);
+                assert!(
+                    result.unwrap_err().to_string().contains("built-in command"),
+                    "Error for '{}' should mention built-in command",
+                    builtin
+                );
+            }
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn set_accepts_custom_name() {
+        with_temp_config(|| {
+            set("focus", "busy 2h").unwrap();
+            let cfg = config::load().unwrap();
+            assert_eq!(
+                cfg.aliases.get("focus").map(|s| s.as_str()),
+                Some("busy 2h")
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn set_overwrites_existing_alias() {
+        with_temp_config(|| {
+            set("focus", "busy 2h").unwrap();
+            set("focus", "busy 4h").unwrap();
+            let cfg = config::load().unwrap();
+            assert_eq!(cfg.aliases["focus"], "busy 4h");
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn remove_errors_on_nonexistent_alias() {
+        with_temp_config(|| {
+            let err = remove("nope").unwrap_err();
+            assert!(err.to_string().contains("not found"));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn remove_deletes_existing_alias() {
+        with_temp_config(|| {
+            set("focus", "busy 2h").unwrap();
+            remove("focus").unwrap();
+            let cfg = config::load().unwrap();
+            assert!(!cfg.aliases.contains_key("focus"));
+        });
+    }
+}

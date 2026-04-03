@@ -71,3 +71,106 @@ pub fn require_token() -> Result<String> {
         None => bail!("Not authenticated. Run `hd auth` first"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    fn with_temp_config<F: FnOnce()>(f: F) {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", dir.path());
+        f();
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
+
+    #[test]
+    #[serial]
+    fn load_token_returns_none_when_no_file() {
+        with_temp_config(|| {
+            assert_eq!(load_token().unwrap(), None);
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn store_then_load_round_trips() {
+        with_temp_config(|| {
+            store_token("hd_abc123").unwrap();
+            assert_eq!(load_token().unwrap(), Some("hd_abc123".to_string()));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn store_creates_parent_directories() {
+        with_temp_config(|| {
+            // Temp dir has no headsdown/ subdir yet
+            store_token("hd_test").unwrap();
+            assert!(credentials_path().unwrap().exists());
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn load_returns_none_for_empty_file() {
+        with_temp_config(|| {
+            let path = credentials_path().unwrap();
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "").unwrap();
+            assert_eq!(load_token().unwrap(), None);
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn load_returns_none_for_whitespace_only_file() {
+        with_temp_config(|| {
+            let path = credentials_path().unwrap();
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "  \n  ").unwrap();
+            assert_eq!(load_token().unwrap(), None);
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn require_token_errors_when_no_token() {
+        with_temp_config(|| {
+            let err = require_token().unwrap_err();
+            assert!(err.to_string().contains("Not authenticated"));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn require_token_returns_token_when_present() {
+        with_temp_config(|| {
+            store_token("hd_xyz").unwrap();
+            assert_eq!(require_token().unwrap(), "hd_xyz");
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn store_empty_string_then_load_returns_none() {
+        with_temp_config(|| {
+            store_token("").unwrap();
+            assert_eq!(load_token().unwrap(), None);
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn store_token_sets_600_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        with_temp_config(|| {
+            store_token("hd_secret").unwrap();
+            let path = credentials_path().unwrap();
+            let metadata = fs::metadata(&path).unwrap();
+            let mode = metadata.permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "Credentials file should be owner-only (0600)");
+        });
+    }
+}

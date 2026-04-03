@@ -72,3 +72,131 @@ pub fn update(f: impl FnOnce(&mut Config)) -> Result<()> {
     f(&mut config);
     save(&config)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    fn with_temp_config<F: FnOnce()>(f: F) {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", dir.path());
+        f();
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
+
+    #[test]
+    #[serial]
+    fn load_returns_default_when_no_file_exists() {
+        with_temp_config(|| {
+            let cfg = load().unwrap();
+            assert!(cfg.default_duration.is_none());
+            assert!(cfg.default_model.is_none());
+            assert!(cfg.api_url.is_none());
+            assert!(!cfg.telemetry.enabled);
+            assert!(cfg.aliases.is_empty());
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn save_then_load_round_trips() {
+        with_temp_config(|| {
+            let mut cfg = Config::default();
+            cfg.default_duration = Some(120);
+            cfg.default_model = Some("gpt-4".to_string());
+            cfg.api_url = Some("https://custom.example.com".to_string());
+            cfg.telemetry.enabled = true;
+            cfg.aliases
+                .insert("focus".to_string(), "busy 2h".to_string());
+            cfg.aliases.insert("brb".to_string(), "offline".to_string());
+
+            save(&cfg).unwrap();
+            let loaded = load().unwrap();
+
+            assert_eq!(loaded.default_duration, Some(120));
+            assert_eq!(loaded.default_model.as_deref(), Some("gpt-4"));
+            assert_eq!(
+                loaded.api_url.as_deref(),
+                Some("https://custom.example.com")
+            );
+            assert!(loaded.telemetry.enabled);
+            assert_eq!(
+                loaded.aliases.get("focus").map(|s| s.as_str()),
+                Some("busy 2h")
+            );
+            assert_eq!(
+                loaded.aliases.get("brb").map(|s| s.as_str()),
+                Some("offline")
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn update_modifies_existing_config() {
+        with_temp_config(|| {
+            let mut cfg = Config::default();
+            cfg.default_duration = Some(60);
+            cfg.default_model = Some("claude".to_string());
+            save(&cfg).unwrap();
+
+            update(|c| c.default_duration = Some(120)).unwrap();
+
+            let loaded = load().unwrap();
+            assert_eq!(loaded.default_duration, Some(120));
+            // Other fields preserved
+            assert_eq!(loaded.default_model.as_deref(), Some("claude"));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn update_creates_file_if_missing() {
+        with_temp_config(|| {
+            update(|c| c.telemetry.enabled = true).unwrap();
+            let loaded = load().unwrap();
+            assert!(loaded.telemetry.enabled);
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn load_returns_error_for_malformed_toml() {
+        with_temp_config(|| {
+            let path = config_path().unwrap();
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "{{{{ not valid toml").unwrap();
+            assert!(load().is_err());
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn unknown_toml_keys_are_ignored() {
+        with_temp_config(|| {
+            let path = config_path().unwrap();
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "unknown_key = \"bar\"\ndefault_duration = 90\n").unwrap();
+            let cfg = load().unwrap();
+            assert_eq!(cfg.default_duration, Some(90));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn aliases_round_trip_through_toml() {
+        with_temp_config(|| {
+            let mut cfg = Config::default();
+            cfg.aliases
+                .insert("focus".to_string(), "busy 2h".to_string());
+            cfg.aliases.insert("brb".to_string(), "offline".to_string());
+            save(&cfg).unwrap();
+
+            let loaded = load().unwrap();
+            assert_eq!(loaded.aliases.len(), 2);
+            assert_eq!(loaded.aliases["focus"], "busy 2h");
+            assert_eq!(loaded.aliases["brb"], "offline");
+        });
+    }
+}

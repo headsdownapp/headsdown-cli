@@ -36,14 +36,20 @@ pub fn color_mode(mode: &str) -> String {
 
 /// Color a verdict decision string.
 pub fn color_verdict(decision: &str) -> String {
+    // Always transform the text (SCOPE_DOWN -> SCOPE DOWN)
+    let display = match decision.to_uppercase().as_str() {
+        "SCOPE_DOWN" => "SCOPE DOWN".to_string(),
+        other => other.to_string(),
+    };
+
     if !colors_enabled() {
-        return decision.to_string();
+        return display;
     }
-    match decision.to_uppercase().as_str() {
-        "APPROVED" => decision.green().bold().to_string(),
-        "SCOPE_DOWN" => "SCOPE DOWN".yellow().bold().to_string(),
-        "DEFERRED" => decision.red().bold().to_string(),
-        _ => decision.bold().to_string(),
+    match display.as_str() {
+        "APPROVED" => display.green().bold().to_string(),
+        "SCOPE DOWN" => display.yellow().bold().to_string(),
+        "DEFERRED" => display.red().bold().to_string(),
+        _ => display.bold().to_string(),
     }
 }
 
@@ -114,5 +120,64 @@ pub fn styled_dimmed(text: &str) -> String {
         text.dimmed().to_string()
     } else {
         text.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_duration_minutes_only() {
+        assert_eq!(format_duration(30), "30 min");
+        assert_eq!(format_duration(59), "59 min");
+        assert_eq!(format_duration(1), "1 min");
+    }
+
+    #[test]
+    fn format_duration_exact_hours() {
+        assert_eq!(format_duration(60), "1 hour");
+        assert_eq!(format_duration(120), "2 hours");
+        assert_eq!(format_duration(180), "3 hours");
+    }
+
+    #[test]
+    fn format_duration_hours_and_minutes() {
+        assert_eq!(format_duration(90), "1h 30m");
+        assert_eq!(format_duration(150), "2h 30m");
+        assert_eq!(format_duration(75), "1h 15m");
+    }
+
+    #[test]
+    fn format_duration_zero() {
+        assert_eq!(format_duration(0), "0 min");
+    }
+
+    #[test]
+    fn color_mode_contains_mode_text() {
+        // Regardless of whether colors are enabled, the mode text must be present
+        assert!(color_mode("BUSY").contains("BUSY"));
+        assert!(color_mode("ONLINE").contains("ONLINE"));
+        assert!(color_mode("LIMITED").contains("LIMITED"));
+        assert!(color_mode("OFFLINE").contains("OFFLINE"));
+        assert!(color_mode("CUSTOM").contains("CUSTOM"));
+    }
+
+    #[test]
+    fn color_verdict_maps_scope_down() {
+        // SCOPE_DOWN gets transformed to "SCOPE DOWN" (with space)
+        let result = color_verdict("SCOPE_DOWN");
+        assert!(
+            result.contains("SCOPE DOWN"),
+            "Expected 'SCOPE DOWN' in '{}'",
+            result
+        );
+    }
+
+    #[test]
+    fn color_verdict_contains_decision_text() {
+        assert!(color_verdict("APPROVED").contains("APPROVED"));
+        assert!(color_verdict("DEFERRED").contains("DEFERRED"));
+        assert!(color_verdict("UNKNOWN").contains("UNKNOWN"));
     }
 }
