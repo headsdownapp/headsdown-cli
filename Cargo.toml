@@ -1,0 +1,25 @@
+[package]
+name = "headsdown-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool for HeadsDown availability management"
+license = "MIT"
+repository = "https://github.com/headsdownapp/headsdown-cli"
+keywords = ["cli", "availability", "developer-tools"]
+
+[[bin]]
+name = "hd"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+indicatif = "0.17"
+owo-colors = "4"
+directories = "5"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
