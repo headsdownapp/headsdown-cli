@@ -102,6 +102,46 @@ enum Commands {
         action: TelemetryAction,
     },
 
+    /// Manage calibration reporting (improves verdict accuracy)
+    Calibration {
+        #[command(subcommand)]
+        action: CalibrationAction,
+    },
+
+    /// Report the outcome of an agent task
+    Outcome {
+        /// Proposal ID from the verdict
+        proposal_id: String,
+
+        /// What happened (completed, failed, partially_completed, cancelled, timed_out)
+        #[arg(value_parser = ["completed", "failed", "partially_completed", "cancelled", "timed_out"])]
+        outcome: String,
+
+        /// Duration in minutes
+        #[arg(long, short = 'd')]
+        duration: Option<i32>,
+
+        /// Files modified
+        #[arg(long, short = 'f')]
+        files: Option<i32>,
+
+        /// Lines changed
+        #[arg(long, short = 'l')]
+        lines: Option<i32>,
+
+        /// Turn count
+        #[arg(long, short = 't')]
+        turns: Option<i32>,
+
+        /// Error category if failed
+        #[arg(long)]
+        error_category: Option<String>,
+
+        /// Whether tests passed
+        #[arg(long)]
+        tests_passed: Option<bool>,
+    },
+
     /// Manage command aliases
     Alias {
         #[command(subcommand)]
@@ -139,6 +179,16 @@ enum TelemetryAction {
     /// Disable anonymous usage telemetry
     Off,
     /// Show current telemetry status
+    Status,
+}
+
+#[derive(Subcommand)]
+enum CalibrationAction {
+    /// Enable calibration reporting
+    On,
+    /// Disable calibration reporting
+    Off,
+    /// Show current calibration status
     Status,
 }
 
@@ -234,6 +284,35 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             TelemetryAction::Off => commands::telemetry_cmd::disable(),
             TelemetryAction::Status => commands::telemetry_cmd::status(),
         },
+        Commands::Calibration { action } => match action {
+            CalibrationAction::On => commands::calibration_cmd::enable(),
+            CalibrationAction::Off => commands::calibration_cmd::disable(),
+            CalibrationAction::Status => commands::calibration_cmd::status(),
+        },
+        Commands::Outcome {
+            proposal_id,
+            outcome,
+            duration,
+            files,
+            lines,
+            turns,
+            error_category,
+            tests_passed,
+        } => {
+            commands::outcome::run(
+                &api_url,
+                &proposal_id,
+                &outcome,
+                duration,
+                files,
+                lines,
+                turns,
+                error_category,
+                tests_passed,
+                json,
+            )
+            .await
+        }
         Commands::Alias { action } => match action {
             AliasAction::Set { name, command } => commands::alias::set(&name, &command),
             AliasAction::Remove { name } => commands::alias::remove(&name),
@@ -274,6 +353,8 @@ fn command_name(cmd: &Commands) -> &'static str {
         Commands::Update => "update",
         Commands::Hook { .. } => "hook",
         Commands::Telemetry { .. } => "telemetry",
+        Commands::Calibration { .. } => "calibration",
+        Commands::Outcome { .. } => "outcome",
         Commands::Alias { .. } => "alias",
         Commands::Completions { .. } => "completions",
         Commands::Manpages { .. } => "manpages",

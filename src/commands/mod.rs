@@ -1,8 +1,10 @@
 pub mod alias;
 pub mod auth;
+pub mod calibration_cmd;
 pub mod doctor;
 pub mod hooks;
 pub mod mode;
+pub mod outcome;
 pub mod presets;
 pub mod status;
 pub mod telemetry_cmd;

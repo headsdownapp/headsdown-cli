@@ -17,6 +17,8 @@ pub struct Config {
     pub api_url: Option<String>,
     /// Telemetry settings
     pub telemetry: TelemetryConfig,
+    /// Calibration settings (improves verdict accuracy over time)
+    pub calibration: CalibrationConfig,
     /// User-defined command aliases
     #[serde(default)]
     pub aliases: HashMap<String, String>,
@@ -27,6 +29,19 @@ pub struct Config {
 pub struct TelemetryConfig {
     /// Whether anonymous usage telemetry is enabled
     pub enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CalibrationConfig {
+    /// Whether calibration reporting is enabled (improves verdict accuracy)
+    pub enabled: bool,
+}
+
+impl Default for CalibrationConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 /// Returns the config directory path, respecting XDG_CONFIG_HOME.
@@ -94,6 +109,7 @@ mod tests {
             assert!(cfg.default_model.is_none());
             assert!(cfg.api_url.is_none());
             assert!(!cfg.telemetry.enabled);
+            assert!(cfg.calibration.enabled); // calibration defaults to enabled
             assert!(cfg.aliases.is_empty());
         });
     }
@@ -107,6 +123,7 @@ mod tests {
             cfg.default_model = Some("gpt-4".to_string());
             cfg.api_url = Some("https://custom.example.com".to_string());
             cfg.telemetry.enabled = true;
+            cfg.calibration.enabled = false; // Test non-default value
             cfg.aliases
                 .insert("focus".to_string(), "busy 2h".to_string());
             cfg.aliases.insert("brb".to_string(), "offline".to_string());
@@ -121,6 +138,7 @@ mod tests {
                 Some("https://custom.example.com")
             );
             assert!(loaded.telemetry.enabled);
+            assert!(!loaded.calibration.enabled);
             assert_eq!(
                 loaded.aliases.get("focus").map(|s| s.as_str()),
                 Some("busy 2h")
@@ -197,6 +215,36 @@ mod tests {
             assert_eq!(loaded.aliases.len(), 2);
             assert_eq!(loaded.aliases["focus"], "busy 2h");
             assert_eq!(loaded.aliases["brb"], "offline");
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn calibration_defaults_to_enabled() {
+        with_temp_config(|| {
+            let cfg = Config::default();
+            assert!(cfg.calibration.enabled);
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn calibration_can_be_toggled() {
+        with_temp_config(|| {
+            // Start with default (enabled)
+            let cfg = Config::default();
+            assert!(cfg.calibration.enabled);
+            save(&cfg).unwrap();
+
+            // Disable it
+            update(|c| c.calibration.enabled = false).unwrap();
+            let loaded = load().unwrap();
+            assert!(!loaded.calibration.enabled);
+
+            // Enable it again
+            update(|c| c.calibration.enabled = true).unwrap();
+            let loaded = load().unwrap();
+            assert!(loaded.calibration.enabled);
         });
     }
 }
