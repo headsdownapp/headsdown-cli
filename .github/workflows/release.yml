@@ -14,10 +14,10 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: [self-hosted, hetzner]
+            os: ubuntu-latest
             artifact: hd-x86_64-linux
           - target: aarch64-unknown-linux-gnu
-            os: [self-hosted, hetzner]
+            os: ubuntu-latest
             artifact: hd-aarch64-linux
             cross: true
           - target: x86_64-apple-darwin
@@ -66,7 +66,7 @@ jobs:
 
   release:
     needs: build
-    runs-on: [self-hosted, hetzner]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -81,7 +81,7 @@ jobs:
 
   update-homebrew:
     needs: release
-    runs-on: [self-hosted, hetzner]
+    runs-on: ubuntu-latest
     steps:
       - name: Get version from tag
         id: version
