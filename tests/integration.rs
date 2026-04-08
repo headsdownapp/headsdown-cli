@@ -52,6 +52,11 @@ fn subcommand_help_works() {
         "status",
         "availability",
         "windows",
+        "digest",
+        "autoresponder",
+        "verdict-settings",
+        "proposals",
+        "interrupt",
         "whoami",
         "busy",
         "online",
@@ -94,6 +99,67 @@ fn windows_subcommand_help_works() {
             .success()
             .stdout(predicate::str::contains("Usage:"));
     }
+}
+
+#[test]
+fn presets_subcommand_help_works() {
+    for cmd in &[
+        ["presets", "list"],
+        ["presets", "create"],
+        ["presets", "update"],
+        ["presets", "delete"],
+    ] {
+        Command::cargo_bin("hd")
+            .unwrap()
+            .args([cmd[0], cmd[1], "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Usage:"));
+    }
+}
+
+#[test]
+fn digest_subcommand_help_works() {
+    for cmd in &[
+        ["digest", "list"],
+        ["digest", "dismiss"],
+        ["autoresponder", "get"],
+        ["autoresponder", "set"],
+        ["verdict-settings", "get"],
+        ["verdict-settings", "set"],
+    ] {
+        Command::cargo_bin("hd")
+            .unwrap()
+            .args([cmd[0], cmd[1], "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Usage:"));
+    }
+}
+
+#[test]
+fn windows_update_without_fields_fails_with_helpful_message() {
+    Command::cargo_bin("hd")
+        .unwrap()
+        .args(["windows", "update", "window_123"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("No updates provided"));
+}
+
+#[test]
+fn windows_create_missing_required_args_fails_at_parse() {
+    Command::cargo_bin("hd")
+        .unwrap()
+        .args([
+            "windows", "create", "--label", "Focus", "--mode", "busy", "--days", "Mon-Fri",
+            "--start", "09:00:00",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "required arguments were not provided",
+        ));
 }
 
 #[test]

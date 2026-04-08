@@ -46,6 +46,53 @@ enum Commands {
         action: Option<WindowAction>,
     },
 
+    /// Manage preset configurations
+    Presets {
+        #[command(subcommand)]
+        action: Option<PresetsAction>,
+    },
+
+    /// Apply a preset by name or ID
+    Preset {
+        /// Preset name or ID
+        name: String,
+    },
+
+    /// Manage digest summaries
+    Digest {
+        #[command(subcommand)]
+        action: Option<DigestAction>,
+    },
+
+    /// Manage auto-responder text
+    Autoresponder {
+        #[command(subcommand)]
+        action: Option<AutoResponderAction>,
+    },
+
+    /// Manage verdict threshold settings
+    VerdictSettings {
+        #[command(subcommand)]
+        action: Option<VerdictSettingsAction>,
+    },
+
+    /// List recent task proposals
+    Proposals {
+        /// Number of latest proposals to fetch
+        #[arg(long)]
+        latest: Option<i32>,
+
+        /// Filter by verdict decision (approved, deferred)
+        #[arg(long, value_parser = ["approved", "deferred"])]
+        verdict: Option<String>,
+    },
+
+    /// Evaluate whether interrupting someone is allowed
+    Interrupt {
+        /// User handle to evaluate
+        handle: String,
+    },
+
     /// Show your authenticated identity
     Whoami,
 
@@ -83,15 +130,6 @@ enum Commands {
         /// AI model being used
         #[arg(long)]
         model: Option<String>,
-    },
-
-    /// List available presets
-    Presets,
-
-    /// Activate a preset by name or ID
-    Preset {
-        /// Preset name or ID
-        name: String,
     },
 
     /// Live-updating status dashboard
@@ -293,6 +331,94 @@ enum WindowAction {
 }
 
 #[derive(Subcommand)]
+enum PresetsAction {
+    /// List configured presets
+    List,
+
+    /// Create a preset
+    Create {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        alerts: Option<String>,
+        #[arg(long)]
+        presence: Option<String>,
+        #[arg(long)]
+        duration: Option<i32>,
+        #[arg(long)]
+        status: Option<bool>,
+        #[arg(long)]
+        status_emoji: Option<String>,
+        #[arg(long)]
+        status_text: Option<String>,
+    },
+
+    /// Update a preset by id
+    Update {
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        alerts: Option<String>,
+        #[arg(long)]
+        presence: Option<String>,
+        #[arg(long)]
+        duration: Option<i32>,
+        #[arg(long)]
+        status: Option<bool>,
+        #[arg(long)]
+        status_emoji: Option<String>,
+        #[arg(long)]
+        status_text: Option<String>,
+    },
+
+    /// Delete a preset by id
+    Delete { id: String },
+}
+
+#[derive(Subcommand)]
+enum DigestAction {
+    /// List recent digest summaries
+    List {
+        /// Number of latest summaries to fetch
+        #[arg(long)]
+        latest: Option<i32>,
+    },
+
+    /// Dismiss a digest entry by id
+    Dismiss { id: String },
+}
+
+#[derive(Subcommand)]
+enum AutoResponderAction {
+    /// Show current auto-responder settings
+    Get,
+
+    /// Update auto-responder text templates
+    Set {
+        #[arg(long)]
+        busy_text: Option<String>,
+        #[arg(long)]
+        limited_text: Option<String>,
+        #[arg(long)]
+        offline_text: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum VerdictSettingsAction {
+    /// Show current verdict settings
+    Get,
+
+    /// Update mode thresholds JSON
+    Set {
+        /// JSON object for mode thresholds
+        #[arg(long)]
+        mode_thresholds: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum HookAction {
     /// Install git hooks in the current repository
     Install,
@@ -463,6 +589,101 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
                 commands::windows::delete(&api_url, &id, json).await
             }
         },
+        Commands::Presets { action } => match action {
+            None | Some(PresetsAction::List) => commands::presets::list(&api_url, json).await,
+            Some(PresetsAction::Create {
+                name,
+                alerts,
+                presence,
+                duration,
+                status,
+                status_emoji,
+                status_text,
+            }) => {
+                commands::presets::create(
+                    &api_url,
+                    commands::presets::PresetInputArgs {
+                        name: Some(name),
+                        alerts,
+                        presence,
+                        duration,
+                        status,
+                        status_emoji,
+                        status_text,
+                    },
+                    json,
+                )
+                .await
+            }
+            Some(PresetsAction::Update {
+                id,
+                name,
+                alerts,
+                presence,
+                duration,
+                status,
+                status_emoji,
+                status_text,
+            }) => {
+                commands::presets::update(
+                    &api_url,
+                    &id,
+                    commands::presets::PresetInputArgs {
+                        name,
+                        alerts,
+                        presence,
+                        duration,
+                        status,
+                        status_emoji,
+                        status_text,
+                    },
+                    json,
+                )
+                .await
+            }
+            Some(PresetsAction::Delete { id }) => {
+                commands::presets::delete(&api_url, &id, json).await
+            }
+        },
+        Commands::Preset { name } => commands::presets::activate(&api_url, &name, json).await,
+        Commands::Digest { action } => match action {
+            None | Some(DigestAction::List { latest: None }) => {
+                commands::digest::list(&api_url, None, json).await
+            }
+            Some(DigestAction::List { latest }) => {
+                commands::digest::list(&api_url, latest, json).await
+            }
+            Some(DigestAction::Dismiss { id }) => {
+                commands::digest::dismiss(&api_url, &id, json).await
+            }
+        },
+        Commands::Autoresponder { action } => match action {
+            None | Some(AutoResponderAction::Get) => {
+                commands::autoresponder::get(&api_url, json).await
+            }
+            Some(AutoResponderAction::Set {
+                busy_text,
+                limited_text,
+                offline_text,
+            }) => {
+                commands::autoresponder::set(&api_url, busy_text, limited_text, offline_text, json)
+                    .await
+            }
+        },
+        Commands::VerdictSettings { action } => match action {
+            None | Some(VerdictSettingsAction::Get) => {
+                commands::verdict_settings::get(&api_url, json).await
+            }
+            Some(VerdictSettingsAction::Set { mode_thresholds }) => {
+                commands::verdict_settings::set(&api_url, &mode_thresholds, json).await
+            }
+        },
+        Commands::Proposals { latest, verdict } => {
+            commands::proposals::list(&api_url, latest, verdict, json).await
+        }
+        Commands::Interrupt { handle } => {
+            commands::interrupt::evaluate(&api_url, &handle, json).await
+        }
         Commands::Whoami => commands::whoami::run(&api_url, json).await,
         Commands::Busy { duration } => commands::mode::run(&api_url, "BUSY", duration, json).await,
         Commands::Online => commands::mode::run(&api_url, "ONLINE", None, json).await,
@@ -476,8 +697,6 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             minutes,
             model,
         } => commands::verdict::run(&api_url, &description, files, minutes, model, json).await,
-        Commands::Presets => commands::presets::run(&api_url, json).await,
-        Commands::Preset { name } => commands::presets::activate(&api_url, &name, json).await,
         Commands::Watch => commands::watch::run(&api_url).await,
         Commands::Doctor => commands::doctor::run(&api_url, json).await,
         Commands::Update => commands::update::run().await,
@@ -549,14 +768,19 @@ fn command_name(cmd: &Commands) -> &'static str {
         Commands::Status => "status",
         Commands::Availability { .. } => "availability",
         Commands::Windows { .. } => "windows",
+        Commands::Presets { .. } => "presets",
+        Commands::Preset { .. } => "preset",
+        Commands::Digest { .. } => "digest",
+        Commands::Autoresponder { .. } => "autoresponder",
+        Commands::VerdictSettings { .. } => "verdict-settings",
+        Commands::Proposals { .. } => "proposals",
+        Commands::Interrupt { .. } => "interrupt",
         Commands::Whoami => "whoami",
         Commands::Busy { .. } => "busy",
         Commands::Online => "online",
         Commands::Offline => "offline",
         Commands::Limited { .. } => "limited",
         Commands::Verdict { .. } => "verdict",
-        Commands::Presets => "presets",
-        Commands::Preset { .. } => "preset",
         Commands::Watch => "watch",
         Commands::Doctor => "doctor",
         Commands::Update => "update",
