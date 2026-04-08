@@ -20,6 +20,7 @@ mutation ReportOutcome($input: OutcomeInput!) {
 }
 "#;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     api_url: &str,
     proposal_id: &str,

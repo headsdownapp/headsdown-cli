@@ -1,5 +1,6 @@
 pub mod alias;
 pub mod auth;
+pub mod availability;
 pub mod calibration_cmd;
 pub mod doctor;
 pub mod hooks;
@@ -12,3 +13,4 @@ pub mod update;
 pub mod verdict;
 pub mod watch;
 pub mod whoami;
+pub mod windows;

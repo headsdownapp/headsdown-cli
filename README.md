@@ -28,8 +28,10 @@ curl -fsSL https://headsdown.app/install.sh | sh
 # Authenticate (opens browser for approval)
 hd auth
 
-# Check your current status
+# Check your current status and availability
 hd status
+hd availability
+hd windows
 
 # Set yourself to busy for 2 hours
 hd busy 2h
@@ -54,6 +56,8 @@ hd watch
 |---------|-------------|
 | `hd auth` | Authenticate via Device Flow (browser-based) |
 | `hd status` | Show your current availability |
+| `hd availability [--at <rfc3339>]` | Show availability resolution and next transition |
+| `hd windows` | List configured reachability windows |
 | `hd whoami` | Show your authenticated identity |
 | `hd busy [duration]` | Set mode to busy |
 | `hd online` | Set mode to online |
@@ -72,6 +76,8 @@ hd watch
 | `hd alias remove NAME` | Remove an alias |
 | `hd alias list` | List all aliases |
 | `hd telemetry on\|off` | Toggle anonymous usage telemetry |
+| `hd calibration on\|off\|status` | Manage calibration reporting |
+| `hd outcome <proposal_id> <outcome>` | Report the real task outcome |
 | `hd completions <shell>` | Generate shell completions (bash, zsh, fish) |
 
 ## Duration Formats

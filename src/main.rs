@@ -33,6 +33,16 @@ enum Commands {
     /// Show your current availability status
     Status,
 
+    /// Show your availability resolution
+    Availability {
+        /// Optional RFC3339 timestamp to resolve at (defaults to now)
+        #[arg(long)]
+        at: Option<String>,
+    },
+
+    /// List configured reachability windows
+    Windows,
+
     /// Show your authenticated identity
     Whoami,
 
@@ -256,6 +266,8 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Commands::Auth => commands::auth::run(&api_url).await,
         Commands::Status => commands::status::run(&api_url, json).await,
+        Commands::Availability { at } => commands::availability::run(&api_url, at, json).await,
+        Commands::Windows => commands::windows::run(&api_url, json).await,
         Commands::Whoami => commands::whoami::run(&api_url, json).await,
         Commands::Busy { duration } => commands::mode::run(&api_url, "BUSY", duration, json).await,
         Commands::Online => commands::mode::run(&api_url, "ONLINE", None, json).await,
@@ -340,6 +352,8 @@ fn command_name(cmd: &Commands) -> &'static str {
     match cmd {
         Commands::Auth => "auth",
         Commands::Status => "status",
+        Commands::Availability { .. } => "availability",
+        Commands::Windows => "windows",
         Commands::Whoami => "whoami",
         Commands::Busy { .. } => "busy",
         Commands::Online => "online",
