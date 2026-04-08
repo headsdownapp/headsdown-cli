@@ -32,6 +32,7 @@ hd auth
 hd status
 hd availability
 hd windows
+hd windows create --label "Focus" --mode busy --days "Mon-Fri" --start 09:00:00 --end 11:30:00
 
 # Set yourself to busy for 2 hours
 hd busy 2h
@@ -57,7 +58,10 @@ hd watch
 | `hd auth` | Authenticate via Device Flow (browser-based) |
 | `hd status` | Show your current availability |
 | `hd availability [--at <rfc3339>]` | Show availability resolution and next transition |
-| `hd windows` | List configured reachability windows |
+| `hd windows [list]` | List configured reachability windows |
+| `hd windows create ...` | Create a reachability window |
+| `hd windows update <id> ...` | Update a reachability window |
+| `hd windows delete <id>` | Delete a reachability window |
 | `hd whoami` | Show your authenticated identity |
 | `hd busy [duration]` | Set mode to busy |
 | `hd online` | Set mode to online |

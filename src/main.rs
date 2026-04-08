@@ -40,8 +40,11 @@ enum Commands {
         at: Option<String>,
     },
 
-    /// List configured reachability windows
-    Windows,
+    /// Manage reachability windows
+    Windows {
+        #[command(subcommand)]
+        action: Option<WindowAction>,
+    },
 
     /// Show your authenticated identity
     Whoami,
@@ -173,6 +176,123 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
+enum WindowAction {
+    /// List configured windows
+    List,
+
+    /// Create a reachability window
+    Create {
+        /// Window label
+        #[arg(long)]
+        label: String,
+
+        /// Mode (online, busy, limited, offline)
+        #[arg(long, value_parser = ["online", "busy", "limited", "offline"])]
+        mode: String,
+
+        /// Days expression (for example: Mon-Fri)
+        #[arg(long)]
+        days: String,
+
+        /// Start time (HH:MM:SS)
+        #[arg(long)]
+        start: String,
+
+        /// End time (HH:MM:SS)
+        #[arg(long)]
+        end: String,
+
+        /// Alerts policy (off, interruptable, do_not_disturb, take_a_number, after_hours)
+        #[arg(long, value_parser = ["off", "interruptable", "do_not_disturb", "take_a_number", "after_hours"])]
+        alerts_policy: Option<String>,
+
+        /// Priority (higher wins)
+        #[arg(long)]
+        priority: Option<i32>,
+
+        /// Auto activate this window
+        #[arg(long)]
+        auto_activate: Option<bool>,
+
+        /// Enable snooze for this window
+        #[arg(long)]
+        snooze: Option<bool>,
+
+        /// Set status enabled/disabled for this window
+        #[arg(long)]
+        status: Option<bool>,
+
+        /// Optional status emoji
+        #[arg(long)]
+        status_emoji: Option<String>,
+
+        /// Optional status text
+        #[arg(long)]
+        status_text: Option<String>,
+    },
+
+    /// Update a reachability window
+    Update {
+        /// Window id
+        id: String,
+
+        /// Window label
+        #[arg(long)]
+        label: Option<String>,
+
+        /// Mode (online, busy, limited, offline)
+        #[arg(long, value_parser = ["online", "busy", "limited", "offline"])]
+        mode: Option<String>,
+
+        /// Days expression (for example: Mon-Fri)
+        #[arg(long)]
+        days: Option<String>,
+
+        /// Start time (HH:MM:SS)
+        #[arg(long)]
+        start: Option<String>,
+
+        /// End time (HH:MM:SS)
+        #[arg(long)]
+        end: Option<String>,
+
+        /// Alerts policy (off, interruptable, do_not_disturb, take_a_number, after_hours)
+        #[arg(long, value_parser = ["off", "interruptable", "do_not_disturb", "take_a_number", "after_hours"])]
+        alerts_policy: Option<String>,
+
+        /// Priority (higher wins)
+        #[arg(long)]
+        priority: Option<i32>,
+
+        /// Auto activate this window
+        #[arg(long)]
+        auto_activate: Option<bool>,
+
+        /// Enable snooze for this window
+        #[arg(long)]
+        snooze: Option<bool>,
+
+        /// Set status enabled/disabled for this window
+        #[arg(long)]
+        status: Option<bool>,
+
+        /// Optional status emoji
+        #[arg(long)]
+        status_emoji: Option<String>,
+
+        /// Optional status text
+        #[arg(long)]
+        status_text: Option<String>,
+    },
+
+    /// Delete a reachability window
+    Delete {
+        /// Window id
+        id: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum HookAction {
     /// Install git hooks in the current repository
     Install,
@@ -267,7 +387,82 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Commands::Auth => commands::auth::run(&api_url).await,
         Commands::Status => commands::status::run(&api_url, json).await,
         Commands::Availability { at } => commands::availability::run(&api_url, at, json).await,
-        Commands::Windows => commands::windows::run(&api_url, json).await,
+        Commands::Windows { action } => match action {
+            None | Some(WindowAction::List) => commands::windows::list(&api_url, json).await,
+            Some(WindowAction::Create {
+                label,
+                mode,
+                days,
+                start,
+                end,
+                alerts_policy,
+                priority,
+                auto_activate,
+                snooze,
+                status,
+                status_emoji,
+                status_text,
+            }) => {
+                commands::windows::create(
+                    &api_url,
+                    commands::windows::WindowInputArgs {
+                        label: Some(label),
+                        mode: Some(mode),
+                        days: Some(days),
+                        start: Some(start),
+                        end: Some(end),
+                        alerts_policy,
+                        priority,
+                        auto_activate,
+                        snooze,
+                        status,
+                        status_emoji,
+                        status_text,
+                    },
+                    json,
+                )
+                .await
+            }
+            Some(WindowAction::Update {
+                id,
+                label,
+                mode,
+                days,
+                start,
+                end,
+                alerts_policy,
+                priority,
+                auto_activate,
+                snooze,
+                status,
+                status_emoji,
+                status_text,
+            }) => {
+                commands::windows::update(
+                    &api_url,
+                    &id,
+                    commands::windows::WindowInputArgs {
+                        label,
+                        mode,
+                        days,
+                        start,
+                        end,
+                        alerts_policy,
+                        priority,
+                        auto_activate,
+                        snooze,
+                        status,
+                        status_emoji,
+                        status_text,
+                    },
+                    json,
+                )
+                .await
+            }
+            Some(WindowAction::Delete { id }) => {
+                commands::windows::delete(&api_url, &id, json).await
+            }
+        },
         Commands::Whoami => commands::whoami::run(&api_url, json).await,
         Commands::Busy { duration } => commands::mode::run(&api_url, "BUSY", duration, json).await,
         Commands::Online => commands::mode::run(&api_url, "ONLINE", None, json).await,
@@ -353,7 +548,7 @@ fn command_name(cmd: &Commands) -> &'static str {
         Commands::Auth => "auth",
         Commands::Status => "status",
         Commands::Availability { .. } => "availability",
-        Commands::Windows => "windows",
+        Commands::Windows { .. } => "windows",
         Commands::Whoami => "whoami",
         Commands::Busy { .. } => "busy",
         Commands::Online => "online",

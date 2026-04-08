@@ -80,6 +80,23 @@ fn subcommand_help_works() {
 }
 
 #[test]
+fn windows_subcommand_help_works() {
+    for cmd in &[
+        ["windows", "list"],
+        ["windows", "create"],
+        ["windows", "update"],
+        ["windows", "delete"],
+    ] {
+        Command::cargo_bin("hd")
+            .unwrap()
+            .args([cmd[0], cmd[1], "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Usage:"));
+    }
+}
+
+#[test]
 fn completions_generates_output() {
     for shell in &["bash", "zsh", "fish"] {
         Command::cargo_bin("hd")
