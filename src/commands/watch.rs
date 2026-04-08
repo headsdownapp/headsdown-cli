@@ -17,11 +17,13 @@ query {
         duration
         lock
     }
-    calendar {
-        day
-        endsAt
-        workHours
-        offHours
+    availability {
+        inReachableHours
+        nextTransitionAt
+        activeWindow {
+            label
+            mode
+        }
     }
     profile {
         name
@@ -56,7 +58,7 @@ pub async fn run(api_url: &str) -> Result<()> {
             Ok(data) => {
                 let contract = &data["activeContract"];
                 let profile = &data["profile"];
-                let calendar = &data["calendar"];
+                let availability = &data["availability"];
 
                 let name = profile["name"].as_str().unwrap_or("Unknown");
                 let mode = contract["mode"]
@@ -67,8 +69,8 @@ pub async fn run(api_url: &str) -> Result<()> {
                 // Clear previous output (move cursor up and clear lines)
                 // On first render, don't clear
                 if !last_mode.is_empty() {
-                    // Move up 6 lines and clear them
-                    for _ in 0..6 {
+                    // Move up 7 lines and clear them
+                    for _ in 0..7 {
                         print!("\x1b[A\x1b[2K");
                     }
                 }
@@ -128,29 +130,36 @@ pub async fn run(api_url: &str) -> Result<()> {
                     println!("  {} -", format::styled_dimmed("Time:"));
                 }
 
-                // Schedule
-                if let Some(true) = calendar["offHours"].as_bool() {
-                    println!(
-                        "  {} {}",
-                        format::styled_dimmed("Schedule:"),
-                        format::styled_dimmed("Off hours")
-                    );
-                } else if let Some(day) = calendar["day"].as_str() {
-                    println!(
-                        "  {} Work hours ({})",
-                        format::styled_dimmed("Schedule:"),
-                        capitalize(day)
-                    );
+                if let Some(in_hours) = availability["inReachableHours"].as_bool() {
+                    let state = if in_hours {
+                        "Reachable now"
+                    } else {
+                        "Not reachable now"
+                    };
+                    println!("  {} {}", format::styled_dimmed("Availability:"), state);
                 } else {
-                    println!("  {} -", format::styled_dimmed("Schedule:"));
+                    println!("  {} -", format::styled_dimmed("Availability:"));
                 }
 
-                // Updated at
-                println!(
-                    "  {} {}",
-                    format::styled_dimmed("Updated:"),
-                    format::styled_dimmed(&Utc::now().format("%H:%M:%S").to_string())
-                );
+                if let Some(label) = availability["activeWindow"]["label"].as_str() {
+                    println!("  {} {}", format::styled_dimmed("Window:"), label);
+                } else {
+                    println!("  {} -", format::styled_dimmed("Window:"));
+                }
+
+                if let Some(next_transition) = availability["nextTransitionAt"].as_str() {
+                    if let Ok(next_at) = next_transition.parse::<DateTime<Utc>>() {
+                        println!(
+                            "  {} {}",
+                            format::styled_dimmed("Next change:"),
+                            format::styled_dimmed(next_at.format("%l:%M %p").to_string().trim())
+                        );
+                    } else {
+                        println!("  {} -", format::styled_dimmed("Next change:"));
+                    }
+                } else {
+                    println!("  {} -", format::styled_dimmed("Next change:"));
+                }
 
                 io::stdout().flush().ok();
 
@@ -184,12 +193,4 @@ pub async fn run(api_url: &str) -> Result<()> {
 
     println!();
     Ok(())
-}
-
-fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(first) => first.to_uppercase().collect::<String>() + &c.as_str().to_lowercase(),
-    }
 }

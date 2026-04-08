@@ -50,6 +50,8 @@ fn subcommand_help_works() {
     for cmd in &[
         "auth",
         "status",
+        "availability",
+        "windows",
         "whoami",
         "busy",
         "online",
@@ -63,6 +65,8 @@ fn subcommand_help_works() {
         "update",
         "hook",
         "telemetry",
+        "calibration",
+        "outcome",
         "alias",
         "completions",
     ] {

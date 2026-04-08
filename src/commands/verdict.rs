@@ -8,6 +8,8 @@ const SUBMIT_PROPOSAL_MUTATION: &str = r#"
 mutation SubmitProposal($input: ProposalInput!) {
     submitProposal(input: $input) {
         decision
+        policy
+        policyStatus
         reason
         proposalId
         evaluatedAt
@@ -57,6 +59,8 @@ pub async fn run(
         .as_str()
         .unwrap_or("UNKNOWN")
         .to_uppercase();
+    let policy = verdict["policy"].as_str().unwrap_or("UNKNOWN");
+    let policy_status = verdict["policyStatus"].as_str().unwrap_or("UNKNOWN");
     let reason = verdict["reason"].as_str().unwrap_or("No reason provided");
 
     println!();
@@ -66,6 +70,8 @@ pub async fn run(
         format::color_verdict(&decision)
     );
     println!();
+    println!("  {} {}", format::styled_dimmed("Policy:"), policy);
+    println!("  {} {}", format::styled_dimmed("State:"), policy_status);
     println!("  {} {}", format::styled_dimmed("Reason:"), reason);
 
     // Show the proposal details

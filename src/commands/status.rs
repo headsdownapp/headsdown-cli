@@ -15,11 +15,17 @@ query {
         duration
         lock
     }
-    calendar {
-        day
-        endsAt
-        workHours
-        offHours
+    availability {
+        inReachableHours
+        nextTransitionAt
+        activeWindow {
+            label
+            mode
+        }
+        nextWindow {
+            label
+            mode
+        }
     }
     profile {
         name
@@ -39,7 +45,7 @@ pub async fn run(api_url: &str, json: bool) -> Result<()> {
     }
 
     let contract = &data["activeContract"];
-    let calendar = &data["calendar"];
+    let availability = &data["availability"];
     let profile = &data["profile"];
 
     let name = profile["name"].as_str().unwrap_or("Unknown");
@@ -88,19 +94,27 @@ pub async fn run(api_url: &str, json: bool) -> Result<()> {
         }
     }
 
-    // Work hours info
-    if let Some(true) = calendar["offHours"].as_bool() {
-        println!(
-            "  {} {}",
-            format::styled_dimmed("Schedule:"),
-            format::styled_dimmed("Off hours")
-        );
-    } else if let Some(day) = calendar["day"].as_str() {
-        println!(
-            "  {} Work hours ({})",
-            format::styled_dimmed("Schedule:"),
-            capitalize(day)
-        );
+    if let Some(in_hours) = availability["inReachableHours"].as_bool() {
+        let state = if in_hours {
+            "Reachable now"
+        } else {
+            "Not reachable now"
+        };
+        println!("  {} {}", format::styled_dimmed("Availability:"), state);
+    }
+
+    if let Some(label) = availability["activeWindow"]["label"].as_str() {
+        println!("  {} {}", format::styled_dimmed("Window:"), label);
+    }
+
+    if let Some(next_transition) = availability["nextTransitionAt"].as_str() {
+        if let Ok(next_at) = next_transition.parse::<DateTime<Utc>>() {
+            println!(
+                "  {} {}",
+                format::styled_dimmed("Next change:"),
+                next_at.format("%l:%M %p").to_string().trim()
+            );
+        }
     }
 
     if contract["lock"].as_bool() == Some(true) {
@@ -113,12 +127,4 @@ pub async fn run(api_url: &str, json: bool) -> Result<()> {
 
     println!();
     Ok(())
-}
-
-fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(first) => first.to_uppercase().collect::<String>() + &c.as_str().to_lowercase(),
-    }
 }

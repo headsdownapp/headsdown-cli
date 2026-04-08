@@ -135,7 +135,6 @@ pub async fn run(api_url: &str, mode: &str, duration: Option<String>, json: bool
 
     let mut input = serde_json::json!({
         "mode": mode,
-        "afk": mode == "OFFLINE",
         "autoRespond": mode == "BUSY",
         "status": false,
     });
