@@ -40,8 +40,58 @@ enum Commands {
         at: Option<String>,
     },
 
-    /// List configured reachability windows
-    Windows,
+    /// Manage reachability windows
+    Windows {
+        #[command(subcommand)]
+        action: Option<WindowAction>,
+    },
+
+    /// Manage preset configurations
+    Presets {
+        #[command(subcommand)]
+        action: Option<PresetsAction>,
+    },
+
+    /// Apply a preset by name or ID
+    Preset {
+        /// Preset name or ID
+        name: String,
+    },
+
+    /// Manage digest summaries
+    Digest {
+        #[command(subcommand)]
+        action: Option<DigestAction>,
+    },
+
+    /// Manage auto-responder text
+    Autoresponder {
+        #[command(subcommand)]
+        action: Option<AutoResponderAction>,
+    },
+
+    /// Manage verdict threshold settings
+    VerdictSettings {
+        #[command(subcommand)]
+        action: Option<VerdictSettingsAction>,
+    },
+
+    /// List recent task proposals
+    Proposals {
+        /// Number of latest proposals to fetch
+        #[arg(long)]
+        latest: Option<i32>,
+
+        /// Filter by verdict decision (approved, deferred)
+        #[arg(long, value_parser = ["approved", "deferred"])]
+        verdict: Option<String>,
+    },
+
+    /// Evaluate whether interrupting someone is allowed
+    Interrupt {
+        /// User handle to evaluate
+        handle: String,
+    },
 
     /// Show your authenticated identity
     Whoami,
@@ -80,15 +130,6 @@ enum Commands {
         /// AI model being used
         #[arg(long)]
         model: Option<String>,
-    },
-
-    /// List available presets
-    Presets,
-
-    /// Activate a preset by name or ID
-    Preset {
-        /// Preset name or ID
-        name: String,
     },
 
     /// Live-updating status dashboard
@@ -169,6 +210,211 @@ enum Commands {
     Manpages {
         /// Output directory
         dir: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum WindowAction {
+    /// List configured windows
+    List,
+
+    /// Create a reachability window
+    Create {
+        /// Window label
+        #[arg(long)]
+        label: String,
+
+        /// Mode (online, busy, limited, offline)
+        #[arg(long, value_parser = ["online", "busy", "limited", "offline"])]
+        mode: String,
+
+        /// Days expression (for example: Mon-Fri)
+        #[arg(long)]
+        days: String,
+
+        /// Start time (HH:MM:SS)
+        #[arg(long)]
+        start: String,
+
+        /// End time (HH:MM:SS)
+        #[arg(long)]
+        end: String,
+
+        /// Alerts policy (off, interruptable, do_not_disturb, take_a_number, after_hours)
+        #[arg(long, value_parser = ["off", "interruptable", "do_not_disturb", "take_a_number", "after_hours"])]
+        alerts_policy: Option<String>,
+
+        /// Priority (higher wins)
+        #[arg(long)]
+        priority: Option<i32>,
+
+        /// Auto activate this window
+        #[arg(long)]
+        auto_activate: Option<bool>,
+
+        /// Enable snooze for this window
+        #[arg(long)]
+        snooze: Option<bool>,
+
+        /// Set status enabled/disabled for this window
+        #[arg(long)]
+        status: Option<bool>,
+
+        /// Optional status emoji
+        #[arg(long)]
+        status_emoji: Option<String>,
+
+        /// Optional status text
+        #[arg(long)]
+        status_text: Option<String>,
+    },
+
+    /// Update a reachability window
+    Update {
+        /// Window id
+        id: String,
+
+        /// Window label
+        #[arg(long)]
+        label: Option<String>,
+
+        /// Mode (online, busy, limited, offline)
+        #[arg(long, value_parser = ["online", "busy", "limited", "offline"])]
+        mode: Option<String>,
+
+        /// Days expression (for example: Mon-Fri)
+        #[arg(long)]
+        days: Option<String>,
+
+        /// Start time (HH:MM:SS)
+        #[arg(long)]
+        start: Option<String>,
+
+        /// End time (HH:MM:SS)
+        #[arg(long)]
+        end: Option<String>,
+
+        /// Alerts policy (off, interruptable, do_not_disturb, take_a_number, after_hours)
+        #[arg(long, value_parser = ["off", "interruptable", "do_not_disturb", "take_a_number", "after_hours"])]
+        alerts_policy: Option<String>,
+
+        /// Priority (higher wins)
+        #[arg(long)]
+        priority: Option<i32>,
+
+        /// Auto activate this window
+        #[arg(long)]
+        auto_activate: Option<bool>,
+
+        /// Enable snooze for this window
+        #[arg(long)]
+        snooze: Option<bool>,
+
+        /// Set status enabled/disabled for this window
+        #[arg(long)]
+        status: Option<bool>,
+
+        /// Optional status emoji
+        #[arg(long)]
+        status_emoji: Option<String>,
+
+        /// Optional status text
+        #[arg(long)]
+        status_text: Option<String>,
+    },
+
+    /// Delete a reachability window
+    Delete {
+        /// Window id
+        id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum PresetsAction {
+    /// List configured presets
+    List,
+
+    /// Create a preset
+    Create {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        alerts: Option<String>,
+        #[arg(long)]
+        presence: Option<String>,
+        #[arg(long)]
+        duration: Option<i32>,
+        #[arg(long)]
+        status: Option<bool>,
+        #[arg(long)]
+        status_emoji: Option<String>,
+        #[arg(long)]
+        status_text: Option<String>,
+    },
+
+    /// Update a preset by id
+    Update {
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        alerts: Option<String>,
+        #[arg(long)]
+        presence: Option<String>,
+        #[arg(long)]
+        duration: Option<i32>,
+        #[arg(long)]
+        status: Option<bool>,
+        #[arg(long)]
+        status_emoji: Option<String>,
+        #[arg(long)]
+        status_text: Option<String>,
+    },
+
+    /// Delete a preset by id
+    Delete { id: String },
+}
+
+#[derive(Subcommand)]
+enum DigestAction {
+    /// List recent digest summaries
+    List {
+        /// Number of latest summaries to fetch
+        #[arg(long)]
+        latest: Option<i32>,
+    },
+
+    /// Dismiss a digest entry by id
+    Dismiss { id: String },
+}
+
+#[derive(Subcommand)]
+enum AutoResponderAction {
+    /// Show current auto-responder settings
+    Get,
+
+    /// Update auto-responder text templates
+    Set {
+        #[arg(long)]
+        busy_text: Option<String>,
+        #[arg(long)]
+        limited_text: Option<String>,
+        #[arg(long)]
+        offline_text: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum VerdictSettingsAction {
+    /// Show current verdict settings
+    Get,
+
+    /// Update mode thresholds JSON
+    Set {
+        /// JSON object for mode thresholds
+        #[arg(long)]
+        mode_thresholds: String,
     },
 }
 
@@ -267,7 +513,177 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Commands::Auth => commands::auth::run(&api_url).await,
         Commands::Status => commands::status::run(&api_url, json).await,
         Commands::Availability { at } => commands::availability::run(&api_url, at, json).await,
-        Commands::Windows => commands::windows::run(&api_url, json).await,
+        Commands::Windows { action } => match action {
+            None | Some(WindowAction::List) => commands::windows::list(&api_url, json).await,
+            Some(WindowAction::Create {
+                label,
+                mode,
+                days,
+                start,
+                end,
+                alerts_policy,
+                priority,
+                auto_activate,
+                snooze,
+                status,
+                status_emoji,
+                status_text,
+            }) => {
+                commands::windows::create(
+                    &api_url,
+                    commands::windows::WindowInputArgs {
+                        label: Some(label),
+                        mode: Some(mode),
+                        days: Some(days),
+                        start: Some(start),
+                        end: Some(end),
+                        alerts_policy,
+                        priority,
+                        auto_activate,
+                        snooze,
+                        status,
+                        status_emoji,
+                        status_text,
+                    },
+                    json,
+                )
+                .await
+            }
+            Some(WindowAction::Update {
+                id,
+                label,
+                mode,
+                days,
+                start,
+                end,
+                alerts_policy,
+                priority,
+                auto_activate,
+                snooze,
+                status,
+                status_emoji,
+                status_text,
+            }) => {
+                commands::windows::update(
+                    &api_url,
+                    &id,
+                    commands::windows::WindowInputArgs {
+                        label,
+                        mode,
+                        days,
+                        start,
+                        end,
+                        alerts_policy,
+                        priority,
+                        auto_activate,
+                        snooze,
+                        status,
+                        status_emoji,
+                        status_text,
+                    },
+                    json,
+                )
+                .await
+            }
+            Some(WindowAction::Delete { id }) => {
+                commands::windows::delete(&api_url, &id, json).await
+            }
+        },
+        Commands::Presets { action } => match action {
+            None | Some(PresetsAction::List) => commands::presets::list(&api_url, json).await,
+            Some(PresetsAction::Create {
+                name,
+                alerts,
+                presence,
+                duration,
+                status,
+                status_emoji,
+                status_text,
+            }) => {
+                commands::presets::create(
+                    &api_url,
+                    commands::presets::PresetInputArgs {
+                        name: Some(name),
+                        alerts,
+                        presence,
+                        duration,
+                        status,
+                        status_emoji,
+                        status_text,
+                    },
+                    json,
+                )
+                .await
+            }
+            Some(PresetsAction::Update {
+                id,
+                name,
+                alerts,
+                presence,
+                duration,
+                status,
+                status_emoji,
+                status_text,
+            }) => {
+                commands::presets::update(
+                    &api_url,
+                    &id,
+                    commands::presets::PresetInputArgs {
+                        name,
+                        alerts,
+                        presence,
+                        duration,
+                        status,
+                        status_emoji,
+                        status_text,
+                    },
+                    json,
+                )
+                .await
+            }
+            Some(PresetsAction::Delete { id }) => {
+                commands::presets::delete(&api_url, &id, json).await
+            }
+        },
+        Commands::Preset { name } => commands::presets::activate(&api_url, &name, json).await,
+        Commands::Digest { action } => match action {
+            None | Some(DigestAction::List { latest: None }) => {
+                commands::digest::list(&api_url, None, json).await
+            }
+            Some(DigestAction::List { latest }) => {
+                commands::digest::list(&api_url, latest, json).await
+            }
+            Some(DigestAction::Dismiss { id }) => {
+                commands::digest::dismiss(&api_url, &id, json).await
+            }
+        },
+        Commands::Autoresponder { action } => match action {
+            None | Some(AutoResponderAction::Get) => {
+                commands::autoresponder::get(&api_url, json).await
+            }
+            Some(AutoResponderAction::Set {
+                busy_text,
+                limited_text,
+                offline_text,
+            }) => {
+                commands::autoresponder::set(&api_url, busy_text, limited_text, offline_text, json)
+                    .await
+            }
+        },
+        Commands::VerdictSettings { action } => match action {
+            None | Some(VerdictSettingsAction::Get) => {
+                commands::verdict_settings::get(&api_url, json).await
+            }
+            Some(VerdictSettingsAction::Set { mode_thresholds }) => {
+                commands::verdict_settings::set(&api_url, &mode_thresholds, json).await
+            }
+        },
+        Commands::Proposals { latest, verdict } => {
+            commands::proposals::list(&api_url, latest, verdict, json).await
+        }
+        Commands::Interrupt { handle } => {
+            commands::interrupt::evaluate(&api_url, &handle, json).await
+        }
         Commands::Whoami => commands::whoami::run(&api_url, json).await,
         Commands::Busy { duration } => commands::mode::run(&api_url, "BUSY", duration, json).await,
         Commands::Online => commands::mode::run(&api_url, "ONLINE", None, json).await,
@@ -281,8 +697,6 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             minutes,
             model,
         } => commands::verdict::run(&api_url, &description, files, minutes, model, json).await,
-        Commands::Presets => commands::presets::run(&api_url, json).await,
-        Commands::Preset { name } => commands::presets::activate(&api_url, &name, json).await,
         Commands::Watch => commands::watch::run(&api_url).await,
         Commands::Doctor => commands::doctor::run(&api_url, json).await,
         Commands::Update => commands::update::run().await,
@@ -353,15 +767,20 @@ fn command_name(cmd: &Commands) -> &'static str {
         Commands::Auth => "auth",
         Commands::Status => "status",
         Commands::Availability { .. } => "availability",
-        Commands::Windows => "windows",
+        Commands::Windows { .. } => "windows",
+        Commands::Presets { .. } => "presets",
+        Commands::Preset { .. } => "preset",
+        Commands::Digest { .. } => "digest",
+        Commands::Autoresponder { .. } => "autoresponder",
+        Commands::VerdictSettings { .. } => "verdict-settings",
+        Commands::Proposals { .. } => "proposals",
+        Commands::Interrupt { .. } => "interrupt",
         Commands::Whoami => "whoami",
         Commands::Busy { .. } => "busy",
         Commands::Online => "online",
         Commands::Offline => "offline",
         Commands::Limited { .. } => "limited",
         Commands::Verdict { .. } => "verdict",
-        Commands::Presets => "presets",
-        Commands::Preset { .. } => "preset",
         Commands::Watch => "watch",
         Commands::Doctor => "doctor",
         Commands::Update => "update",
