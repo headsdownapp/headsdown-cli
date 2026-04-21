@@ -346,7 +346,7 @@ fn normalize_days_input(input: &str) -> Vec<String> {
         if parts.len() == 2 {
             let start = normalize_day(parts[0]);
             let end = normalize_day(parts[1]);
-            let ordered = vec![
+            let ordered = [
                 "MONDAY",
                 "TUESDAY",
                 "WEDNESDAY",
@@ -431,8 +431,8 @@ fn print_window(window: &ReachabilityWindow) {
         format::styled_dimmed("Status:"),
         window.status.unwrap_or(false)
     );
-    if window.status_emoji.as_deref().unwrap_or("") != ""
-        || window.status_text.as_deref().unwrap_or("") != ""
+    if !window.status_emoji.as_deref().unwrap_or("").is_empty()
+        || !window.status_text.as_deref().unwrap_or("").is_empty()
     {
         println!(
             "    {} {} {}",

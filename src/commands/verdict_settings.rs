@@ -109,9 +109,9 @@ pub async fn get(api_url: &str, json: bool) -> Result<()> {
         settings.default_wrap_up_mode
     );
     println!(
-        "  {} {}",
+        "  {} {} min",
         format::styled_dimmed("Wrap-up threshold:"),
-        format!("{} min", settings.wrap_up_threshold_minutes)
+        settings.wrap_up_threshold_minutes
     );
     println!("  {}", format::styled_dimmed("Thresholds:"));
     println!("{}", serde_json::to_string_pretty(&settings.thresholds)?);
