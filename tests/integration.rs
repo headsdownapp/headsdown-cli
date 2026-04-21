@@ -64,6 +64,8 @@ fn subcommand_help_works() {
         "limited",
         "verdict",
         "presets",
+        "grants",
+        "override",
         "preset",
         "watch",
         "doctor",
@@ -103,11 +105,38 @@ fn windows_subcommand_help_works() {
 
 #[test]
 fn presets_subcommand_help_works() {
+    Command::cargo_bin("hd")
+        .unwrap()
+        .args(["presets", "list", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Usage:"));
+}
+
+#[test]
+fn grants_subcommand_help_works() {
     for cmd in &[
-        ["presets", "list"],
-        ["presets", "create"],
-        ["presets", "update"],
-        ["presets", "delete"],
+        ["grants", "list-active"],
+        ["grants", "list"],
+        ["grants", "create"],
+        ["grants", "revoke"],
+        ["grants", "revoke-many"],
+    ] {
+        Command::cargo_bin("hd")
+            .unwrap()
+            .args([cmd[0], cmd[1], "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Usage:"));
+    }
+}
+
+#[test]
+fn override_subcommand_help_works() {
+    for cmd in &[
+        ["override", "get"],
+        ["override", "set"],
+        ["override", "clear"],
     ] {
         Command::cargo_bin("hd")
             .unwrap()

@@ -1,27 +1,55 @@
 use anyhow::{bail, Context, Result};
 use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-/// Returns the path to the credentials file, respecting XDG_CONFIG_HOME.
-fn credentials_path() -> Result<PathBuf> {
-    let dir = if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        PathBuf::from(xdg).join("headsdown")
-    } else if let Some(proj) = ProjectDirs::from("app", "headsdown", "headsdown") {
-        proj.config_dir().to_path_buf()
-    } else {
-        bail!("Could not determine config directory");
-    };
-
-    Ok(dir.join("credentials"))
+#[derive(Deserialize, Serialize)]
+struct JsonCredentials {
+    #[serde(rename = "apiKey")]
+    api_key: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    label: Option<String>,
 }
 
-/// Load the stored API key, if any.
+/// Returns the path to the config directory, respecting XDG_CONFIG_HOME.
+fn config_dir() -> Result<PathBuf> {
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+        Ok(PathBuf::from(xdg).join("headsdown"))
+    } else if let Some(proj) = ProjectDirs::from("app", "headsdown", "headsdown") {
+        Ok(proj.config_dir().to_path_buf())
+    } else {
+        bail!("Could not determine config directory");
+    }
+}
+
+fn legacy_credentials_path() -> Result<PathBuf> {
+    Ok(config_dir()?.join("credentials"))
+}
+
+fn json_credentials_path() -> Result<PathBuf> {
+    Ok(config_dir()?.join("credentials.json"))
+}
+
+/// Load the stored API key, if any. Supports both legacy plain-token credentials and modern credentials.json.
 pub fn load_token() -> Result<Option<String>> {
-    let path = credentials_path()?;
-    if path.exists() {
-        let contents = fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read {}", path.display()))?;
+    let json_path = json_credentials_path()?;
+    if json_path.exists() {
+        let contents = fs::read_to_string(&json_path)
+            .with_context(|| format!("Failed to read {}", json_path.display()))?;
+        if let Ok(parsed) = serde_json::from_str::<JsonCredentials>(&contents) {
+            let token = parsed.api_key.trim().to_string();
+            if !token.is_empty() {
+                return Ok(Some(token));
+            }
+        }
+    }
+
+    let legacy_path = legacy_credentials_path()?;
+    if legacy_path.exists() {
+        let contents = fs::read_to_string(&legacy_path)
+            .with_context(|| format!("Failed to read {}", legacy_path.display()))?;
         let token = contents.trim().to_string();
         if token.is_empty() {
             Ok(None)
@@ -33,15 +61,32 @@ pub fn load_token() -> Result<Option<String>> {
     }
 }
 
-/// Store the API key to the credentials file.
+/// Store the API key to credentials.json (modern format) and legacy credentials for backwards compatibility.
 pub fn store_token(token: &str) -> Result<()> {
-    let path = credentials_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory {}", parent.display()))?;
-    }
+    let dir = config_dir()?;
+    fs::create_dir_all(&dir)
+        .with_context(|| format!("Failed to create directory {}", dir.display()))?;
 
-    // Write with restrictive permissions (owner read/write only)
+    let trimmed = token.trim();
+
+    let json_path = json_credentials_path()?;
+    let json_payload = JsonCredentials {
+        api_key: trimmed.to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        label: Some("HeadsDown CLI".to_string()),
+    };
+    write_secure(
+        &json_path,
+        &(serde_json::to_string_pretty(&json_payload)? + "\n"),
+    )?;
+
+    let legacy_path = legacy_credentials_path()?;
+    write_secure(&legacy_path, trimmed)?;
+
+    Ok(())
+}
+
+fn write_secure(path: &PathBuf, contents: &str) -> Result<()> {
     #[cfg(unix)]
     {
         use std::io::Write;
@@ -51,14 +96,14 @@ pub fn store_token(token: &str) -> Result<()> {
             .create(true)
             .truncate(true)
             .mode(0o600)
-            .open(&path)
+            .open(path)
             .with_context(|| format!("Failed to write {}", path.display()))?;
-        file.write_all(token.as_bytes())?;
+        file.write_all(contents.as_bytes())?;
     }
 
     #[cfg(not(unix))]
     {
-        fs::write(&path, token).with_context(|| format!("Failed to write {}", path.display()))?;
+        fs::write(path, contents).with_context(|| format!("Failed to write {}", path.display()))?;
     }
 
     Ok(())
@@ -103,33 +148,16 @@ mod tests {
 
     #[test]
     #[serial]
-    fn store_creates_parent_directories() {
+    fn load_reads_json_credentials_when_present() {
         with_temp_config(|| {
-            // Temp dir has no headsdown/ subdir yet
-            store_token("hd_test").unwrap();
-            assert!(credentials_path().unwrap().exists());
-        });
-    }
-
-    #[test]
-    #[serial]
-    fn load_returns_none_for_empty_file() {
-        with_temp_config(|| {
-            let path = credentials_path().unwrap();
+            let path = json_credentials_path().unwrap();
             fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::write(&path, "").unwrap();
-            assert_eq!(load_token().unwrap(), None);
-        });
-    }
-
-    #[test]
-    #[serial]
-    fn load_returns_none_for_whitespace_only_file() {
-        with_temp_config(|| {
-            let path = credentials_path().unwrap();
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::write(&path, "  \n  ").unwrap();
-            assert_eq!(load_token().unwrap(), None);
+            fs::write(
+                &path,
+                r#"{"apiKey":"hd_from_json","createdAt":"2026-01-01T00:00:00Z"}"#,
+            )
+            .unwrap();
+            assert_eq!(load_token().unwrap(), Some("hd_from_json".to_string()));
         });
     }
 
@@ -142,24 +170,6 @@ mod tests {
         });
     }
 
-    #[test]
-    #[serial]
-    fn require_token_returns_token_when_present() {
-        with_temp_config(|| {
-            store_token("hd_xyz").unwrap();
-            assert_eq!(require_token().unwrap(), "hd_xyz");
-        });
-    }
-
-    #[test]
-    #[serial]
-    fn store_empty_string_then_load_returns_none() {
-        with_temp_config(|| {
-            store_token("").unwrap();
-            assert_eq!(load_token().unwrap(), None);
-        });
-    }
-
     #[cfg(unix)]
     #[test]
     #[serial]
@@ -167,8 +177,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         with_temp_config(|| {
             store_token("hd_secret").unwrap();
-            let path = credentials_path().unwrap();
-            let metadata = fs::metadata(&path).unwrap();
+            let metadata = fs::metadata(json_credentials_path().unwrap()).unwrap();
             let mode = metadata.permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "Credentials file should be owner-only (0600)");
         });

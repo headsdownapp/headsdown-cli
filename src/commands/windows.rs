@@ -1,8 +1,10 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::auth;
 use crate::client::GraphQLClient;
+use crate::contract::availability::{format_days, DaysField};
 use crate::format;
 
 const WINDOWS_QUERY: &str = r#"
@@ -101,34 +103,68 @@ pub struct WindowInputArgs {
     pub status_text: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct WindowsResponse {
+    #[serde(rename = "reachabilityWindows")]
+    reachability_windows: Vec<ReachabilityWindow>,
+}
+
+#[derive(Deserialize)]
+struct WindowMutationResponse {
+    #[serde(rename = "createReachabilityWindow")]
+    create_reachability_window: Option<ReachabilityWindow>,
+    #[serde(rename = "updateReachabilityWindow")]
+    update_reachability_window: Option<ReachabilityWindow>,
+    #[serde(rename = "deleteReachabilityWindow")]
+    delete_reachability_window: Option<ReachabilityWindow>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct ReachabilityWindow {
+    id: String,
+    label: String,
+    mode: String,
+    days: Option<DaysField>,
+    #[serde(rename = "startTime")]
+    start_time: Option<String>,
+    #[serde(rename = "endTime")]
+    end_time: Option<String>,
+    #[serde(rename = "alertsPolicy")]
+    alerts_policy: Option<String>,
+    #[serde(rename = "autoActivate")]
+    auto_activate: Option<bool>,
+    priority: Option<i64>,
+    status: Option<bool>,
+    #[serde(rename = "statusEmoji")]
+    status_emoji: Option<String>,
+    #[serde(rename = "statusText")]
+    status_text: Option<String>,
+}
+
 pub async fn list(api_url: &str, json: bool) -> Result<()> {
     let token = auth::require_token()?;
     let client = GraphQLClient::new(api_url, &token);
-    let data = client.execute(WINDOWS_QUERY, None).await?;
+    let data: WindowsResponse = client.execute_typed(WINDOWS_QUERY, None).await?;
 
     if json {
         println!(
             "{}",
-            serde_json::to_string_pretty(&data["reachabilityWindows"])?
+            serde_json::to_string_pretty(&data.reachability_windows)?
         );
         return Ok(());
     }
-
-    let windows = data["reachabilityWindows"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("No reachability windows found"))?;
 
     println!();
     println!("  {}", format::styled_bold("Reachability Windows"));
     println!();
 
-    if windows.is_empty() {
+    if data.reachability_windows.is_empty() {
         println!("  {}", format::styled_dimmed("No windows configured"));
         println!();
         return Ok(());
     }
 
-    for window in windows {
+    for window in &data.reachability_windows {
         print_window(window);
     }
 
@@ -143,22 +179,22 @@ pub async fn create(api_url: &str, args: WindowInputArgs, json: bool) -> Result<
 
     let input = build_input(args);
     let variables = serde_json::json!({ "input": input });
-    let data = client
-        .execute(CREATE_WINDOW_MUTATION, Some(variables))
+    let data: WindowMutationResponse = client
+        .execute_typed(CREATE_WINDOW_MUTATION, Some(variables))
         .await?;
+    let window = data
+        .create_reachability_window
+        .ok_or_else(|| anyhow!("Missing createReachabilityWindow in response"))?;
 
     if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&data["createReachabilityWindow"])?
-        );
+        println!("{}", serde_json::to_string_pretty(&window)?);
         return Ok(());
     }
 
     println!();
     println!("  {} Window created", format::styled_green_bold("✓"));
     println!();
-    print_window(&data["createReachabilityWindow"]);
+    print_window(&window);
     Ok(())
 }
 
@@ -172,22 +208,22 @@ pub async fn update(api_url: &str, id: &str, args: WindowInputArgs, json: bool) 
 
     let input = build_input(args);
     let variables = serde_json::json!({ "id": id, "input": input });
-    let data = client
-        .execute(UPDATE_WINDOW_MUTATION, Some(variables))
+    let data: WindowMutationResponse = client
+        .execute_typed(UPDATE_WINDOW_MUTATION, Some(variables))
         .await?;
+    let window = data
+        .update_reachability_window
+        .ok_or_else(|| anyhow!("Missing updateReachabilityWindow in response"))?;
 
     if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&data["updateReachabilityWindow"])?
-        );
+        println!("{}", serde_json::to_string_pretty(&window)?);
         return Ok(());
     }
 
     println!();
     println!("  {} Window updated", format::styled_green_bold("✓"));
     println!();
-    print_window(&data["updateReachabilityWindow"]);
+    print_window(&window);
     Ok(())
 }
 
@@ -196,26 +232,23 @@ pub async fn delete(api_url: &str, id: &str, json: bool) -> Result<()> {
     let client = GraphQLClient::new(api_url, &token);
 
     let variables = serde_json::json!({ "id": id });
-    let data = client
-        .execute(DELETE_WINDOW_MUTATION, Some(variables))
+    let data: WindowMutationResponse = client
+        .execute_typed(DELETE_WINDOW_MUTATION, Some(variables))
         .await?;
+    let window = data
+        .delete_reachability_window
+        .ok_or_else(|| anyhow!("Missing deleteReachabilityWindow in response"))?;
 
     if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&data["deleteReachabilityWindow"])?
-        );
+        println!("{}", serde_json::to_string_pretty(&window)?);
         return Ok(());
     }
-
-    let window = &data["deleteReachabilityWindow"];
-    let label = window["label"].as_str().unwrap_or("Unnamed");
 
     println!();
     println!(
         "  {} Deleted window {}",
         format::styled_green_bold("✓"),
-        format::styled_bold(label)
+        format::styled_bold(&window.label)
     );
     println!(
         "  {} {}",
@@ -264,7 +297,7 @@ fn build_input(args: WindowInputArgs) -> Value {
         input["mode"] = serde_json::json!(normalize_mode(&mode));
     }
     if let Some(days) = args.days {
-        input["days"] = serde_json::json!(days);
+        input["days"] = serde_json::json!(normalize_days_input(&days));
     }
     if let Some(start) = args.start {
         input["startTime"] = serde_json::json!(start);
@@ -305,30 +338,82 @@ fn normalize_alerts_policy(policy: &str) -> String {
     policy.trim().replace('-', "_").to_uppercase()
 }
 
-fn print_window(window: &Value) {
-    let id = window["id"].as_str().unwrap_or("-");
-    let label = window["label"].as_str().unwrap_or("Unnamed");
-    let mode = window["mode"].as_str().unwrap_or("UNKNOWN").to_uppercase();
-    let days = window["days"].as_str().unwrap_or("-");
-    let start = window["startTime"].as_str().unwrap_or("-");
-    let end = window["endTime"].as_str().unwrap_or("-");
-    let policy = window["alertsPolicy"].as_str().unwrap_or("-");
-    let priority = window["priority"].as_i64().unwrap_or_default();
-    let auto_activate = window["autoActivate"].as_bool().unwrap_or(false);
-    let status = window["status"].as_bool().unwrap_or(false);
-    let emoji = window["statusEmoji"].as_str().unwrap_or("");
-    let status_text = window["statusText"].as_str().unwrap_or("");
+fn normalize_days_input(input: &str) -> Vec<String> {
+    let normalized = input.trim();
+
+    if normalized.contains('-') {
+        let parts: Vec<&str> = normalized.split('-').collect();
+        if parts.len() == 2 {
+            let start = normalize_day(parts[0]);
+            let end = normalize_day(parts[1]);
+            let ordered = vec![
+                "MONDAY",
+                "TUESDAY",
+                "WEDNESDAY",
+                "THURSDAY",
+                "FRIDAY",
+                "SATURDAY",
+                "SUNDAY",
+            ];
+            if let (Some(start_idx), Some(end_idx)) = (
+                ordered.iter().position(|d| d == &start),
+                ordered.iter().position(|d| d == &end),
+            ) {
+                return if start_idx <= end_idx {
+                    ordered[start_idx..=end_idx]
+                        .iter()
+                        .map(|d| d.to_string())
+                        .collect()
+                } else {
+                    ordered[start_idx..]
+                        .iter()
+                        .chain(ordered[..=end_idx].iter())
+                        .map(|d| d.to_string())
+                        .collect()
+                };
+            }
+        }
+    }
+
+    normalized
+        .split(',')
+        .map(normalize_day)
+        .collect::<Vec<String>>()
+}
+
+fn normalize_day(day: &str) -> String {
+    match day.trim().to_lowercase().as_str() {
+        "mon" | "monday" => "MONDAY".to_string(),
+        "tue" | "tues" | "tuesday" => "TUESDAY".to_string(),
+        "wed" | "wednesday" => "WEDNESDAY".to_string(),
+        "thu" | "thur" | "thurs" | "thursday" => "THURSDAY".to_string(),
+        "fri" | "friday" => "FRIDAY".to_string(),
+        "sat" | "saturday" => "SATURDAY".to_string(),
+        "sun" | "sunday" => "SUNDAY".to_string(),
+        other => other.replace('-', "_").to_uppercase(),
+    }
+}
+
+fn print_window(window: &ReachabilityWindow) {
+    let mode = window.mode.to_uppercase();
+    let days = format_days(window.days.as_ref());
+    let start = window.start_time.clone().unwrap_or_else(|| "-".to_string());
+    let end = window.end_time.clone().unwrap_or_else(|| "-".to_string());
+    let policy = window
+        .alerts_policy
+        .clone()
+        .unwrap_or_else(|| "-".to_string());
 
     println!(
         "  {} {} ({})",
         format::styled_dimmed("•"),
-        format::styled_bold(label),
+        format::styled_bold(&window.label),
         format::color_mode(&mode)
     );
     println!(
         "    {} {} {}-{}",
         format::styled_dimmed("Window:"),
-        days,
+        &days,
         start,
         end
     );
@@ -340,24 +425,26 @@ fn print_window(window: &Value) {
     println!(
         "    {} {}  {} {}  {} {}",
         format::styled_dimmed("Priority:"),
-        priority,
+        window.priority.unwrap_or_default(),
         format::styled_dimmed("Auto:"),
-        auto_activate,
+        window.auto_activate.unwrap_or(false),
         format::styled_dimmed("Status:"),
-        status
+        window.status.unwrap_or(false)
     );
-    if !emoji.is_empty() || !status_text.is_empty() {
+    if window.status_emoji.as_deref().unwrap_or("") != ""
+        || window.status_text.as_deref().unwrap_or("") != ""
+    {
         println!(
             "    {} {} {}",
             format::styled_dimmed("Message:"),
-            emoji,
-            status_text
+            window.status_emoji.clone().unwrap_or_default(),
+            window.status_text.clone().unwrap_or_default()
         );
     }
     println!(
         "    {} {}",
         format::styled_dimmed("ID:"),
-        format::styled_dimmed(id)
+        format::styled_dimmed(&window.id)
     );
     println!();
 }
@@ -415,5 +502,20 @@ mod tests {
             priority: Some(5),
             ..WindowInputArgs::default()
         }));
+    }
+
+    #[test]
+    fn normalize_days_input_supports_ranges_and_lists() {
+        assert_eq!(normalize_days_input("Mon-Fri").len(), 5);
+        assert_eq!(
+            normalize_days_input("Mon,Wed,Fri"),
+            vec!["MONDAY", "WEDNESDAY", "FRIDAY"]
+        );
+    }
+
+    #[test]
+    fn format_days_reads_array_shape() {
+        let value = DaysField::List(vec!["MONDAY".to_string(), "TUESDAY".to_string()]);
+        assert_eq!(format_days(Some(&value)), "monday,tuesday");
     }
 }

@@ -33,9 +33,10 @@ hd status
 hd availability
 hd windows
 hd windows create --label "Focus" --mode busy --days "Mon-Fri" --start 09:00:00 --end 11:30:00
-hd presets create --name "Deep Focus" --alerts do_not_disturb --presence on_keys --duration 90
 hd digest list --latest 10
 hd autoresponder get
+hd grants list-active
+hd override get
 
 # Set yourself to busy for 2 hours
 hd busy 2h
@@ -45,6 +46,14 @@ hd online
 
 # Submit a task for verdict
 hd verdict "refactor auth module" --files 5 --minutes 30
+
+# Tune verdict settings
+hd verdict-settings set --default-wrap-up-mode wrap_up --wrap-up-threshold-minutes 25
+hd verdict-settings set --thresholds '{"online":{"maxFiles":8,"maxEstimatedMinutes":90}}'
+
+# Delegation grants and temporary overrides
+hd grants create --scope workspace --workspace-ref "$PWD" --permissions preset_apply
+hd override set --mode busy --duration-minutes 30 --reason "heads-down coding"
 
 # List and activate presets
 hd presets
@@ -62,22 +71,21 @@ hd watch
 | `hd status` | Show your current availability |
 | `hd availability [--at <rfc3339>]` | Show availability resolution and next transition |
 | `hd windows [list]` | List configured reachability windows |
-| `hd windows create ...` | Create a reachability window |
+| `hd windows create ...` | Create a reachability window (supports days like `Mon-Fri` or `Mon,Wed,Fri`) |
 | `hd windows update <id> ...` | Update a reachability window |
 | `hd windows delete <id>` | Delete a reachability window |
 | `hd presets [list]` | List available presets |
-| `hd presets create ...` | Create a preset |
-| `hd presets update <id> ...` | Update a preset |
-| `hd presets delete <id>` | Delete a preset |
 | `hd preset "name"` | Activate a preset |
 | `hd digest [list] [--latest N]` | List digest summaries |
 | `hd digest dismiss <id>` | Dismiss a digest entry |
 | `hd autoresponder get` | Show auto-responder settings |
 | `hd autoresponder set ...` | Update busy/limited/offline auto-response text |
 | `hd verdict-settings get` | Show verdict settings |
-| `hd verdict-settings set --mode-thresholds '<json>'` | Update verdict mode thresholds |
+| `hd verdict-settings set --thresholds '<json>'` | Update verdict threshold settings |
 | `hd proposals [--latest N] [--verdict approved\|deferred]` | List recent proposals |
 | `hd interrupt <handle>` | Evaluate if an interrupt is allowed |
+| `hd grants [list-active\|list\|create\|revoke\|revoke-many]` | Manage delegation grants |
+| `hd override [get\|set\|clear]` | Manage temporary availability overrides |
 | `hd whoami` | Show your authenticated identity |
 | `hd busy [duration]` | Set mode to busy |
 | `hd online` | Set mode to online |
@@ -156,7 +164,7 @@ The CLI uses [Device Flow](https://www.rfc-editor.org/rfc/rfc8628) authenticatio
 4. Approve the request
 5. The CLI stores your API key locally
 
-Credentials are stored at `~/.config/headsdown/credentials` (XDG-compliant, respects `$XDG_CONFIG_HOME`).
+Credentials are stored at `~/.config/headsdown/credentials.json` (XDG-compliant, respects `$XDG_CONFIG_HOME`). A legacy `credentials` token file is still read for backwards compatibility.
 
 ## Configuration
 
