@@ -2,6 +2,7 @@ mod auth;
 mod client;
 mod commands;
 mod config;
+mod contract;
 mod format;
 mod telemetry;
 
@@ -50,6 +51,18 @@ enum Commands {
     Presets {
         #[command(subcommand)]
         action: Option<PresetsAction>,
+    },
+
+    /// Manage delegation grants
+    Grants {
+        #[command(subcommand)]
+        action: Option<GrantsAction>,
+    },
+
+    /// Manage temporary availability overrides
+    Override {
+        #[command(subcommand)]
+        action: Option<OverrideAction>,
     },
 
     /// Apply a preset by name or ID
@@ -334,46 +347,93 @@ enum WindowAction {
 enum PresetsAction {
     /// List configured presets
     List,
+}
 
-    /// Create a preset
+#[derive(Subcommand)]
+enum GrantsAction {
+    /// List active grants
+    ListActive,
+
+    /// List grants with optional filters
+    List {
+        #[arg(long)]
+        active: Option<bool>,
+        #[arg(long, value_parser = ["session", "workspace", "agent"])]
+        scope: Option<String>,
+        #[arg(long)]
+        session_id: Option<String>,
+        #[arg(long)]
+        workspace_ref: Option<String>,
+        #[arg(long)]
+        agent_id: Option<String>,
+        #[arg(long)]
+        source: Option<String>,
+    },
+
+    /// Create a grant
     Create {
+        #[arg(long, value_parser = ["session", "workspace", "agent"])]
+        scope: String,
         #[arg(long)]
-        name: String,
+        session_id: Option<String>,
         #[arg(long)]
-        alerts: Option<String>,
+        workspace_ref: Option<String>,
         #[arg(long)]
-        presence: Option<String>,
+        agent_id: Option<String>,
+        #[arg(long, value_delimiter = ',')]
+        permissions: Vec<String>,
         #[arg(long)]
-        duration: Option<i32>,
+        duration_minutes: Option<i32>,
         #[arg(long)]
-        status: Option<bool>,
+        expires_at: Option<String>,
         #[arg(long)]
-        status_emoji: Option<String>,
-        #[arg(long)]
-        status_text: Option<String>,
+        source: Option<String>,
     },
 
-    /// Update a preset by id
-    Update {
-        id: String,
+    /// Revoke one grant by id
+    Revoke { id: String },
+
+    /// Revoke many grants with optional filters
+    RevokeMany {
         #[arg(long)]
-        name: Option<String>,
+        active: Option<bool>,
+        #[arg(long, value_parser = ["session", "workspace", "agent"])]
+        scope: Option<String>,
         #[arg(long)]
-        alerts: Option<String>,
+        session_id: Option<String>,
         #[arg(long)]
-        presence: Option<String>,
+        workspace_ref: Option<String>,
         #[arg(long)]
-        duration: Option<i32>,
+        agent_id: Option<String>,
         #[arg(long)]
-        status: Option<bool>,
+        source: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum OverrideAction {
+    /// Get active override
+    Get,
+
+    /// Set a temporary override
+    Set {
+        #[arg(long, value_parser = ["online", "busy", "limited", "offline"])]
+        mode: String,
         #[arg(long)]
-        status_emoji: Option<String>,
+        duration_minutes: Option<i32>,
         #[arg(long)]
-        status_text: Option<String>,
+        expires_at: Option<String>,
+        #[arg(long)]
+        reason: Option<String>,
     },
 
-    /// Delete a preset by id
-    Delete { id: String },
+    /// Clear active override (or specific id)
+    Clear {
+        #[arg(long)]
+        id: Option<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -410,11 +470,19 @@ enum VerdictSettingsAction {
     /// Show current verdict settings
     Get,
 
-    /// Update mode thresholds JSON
+    /// Update verdict settings
     Set {
-        /// JSON object for mode thresholds
+        /// JSON object for thresholds
         #[arg(long)]
-        mode_thresholds: String,
+        thresholds: Option<String>,
+
+        /// Default delivery mode near attention deadline (auto, wrap_up, full_depth)
+        #[arg(long, value_parser = ["auto", "wrap_up", "full_depth"])]
+        default_wrap_up_mode: Option<String>,
+
+        /// Minutes before attention deadline where wrap-up behavior activates
+        #[arg(long)]
+        wrap_up_threshold_minutes: Option<i32>,
     },
 }
 
@@ -591,58 +659,105 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         },
         Commands::Presets { action } => match action {
             None | Some(PresetsAction::List) => commands::presets::list(&api_url, json).await,
-            Some(PresetsAction::Create {
-                name,
-                alerts,
-                presence,
-                duration,
-                status,
-                status_emoji,
-                status_text,
+        },
+        Commands::Grants { action } => match action {
+            None | Some(GrantsAction::ListActive) => {
+                commands::grants::list_active(&api_url, json).await
+            }
+            Some(GrantsAction::List {
+                active,
+                scope,
+                session_id,
+                workspace_ref,
+                agent_id,
+                source,
             }) => {
-                commands::presets::create(
+                commands::grants::list(
                     &api_url,
-                    commands::presets::PresetInputArgs {
-                        name: Some(name),
-                        alerts,
-                        presence,
-                        duration,
-                        status,
-                        status_emoji,
-                        status_text,
+                    commands::grants::GrantsFilterArgs {
+                        active,
+                        scope,
+                        session_id,
+                        workspace_ref,
+                        agent_id,
+                        source,
                     },
                     json,
                 )
                 .await
             }
-            Some(PresetsAction::Update {
-                id,
-                name,
-                alerts,
-                presence,
-                duration,
-                status,
-                status_emoji,
-                status_text,
+            Some(GrantsAction::Create {
+                scope,
+                session_id,
+                workspace_ref,
+                agent_id,
+                permissions,
+                duration_minutes,
+                expires_at,
+                source,
             }) => {
-                commands::presets::update(
+                commands::grants::create(
                     &api_url,
-                    &id,
-                    commands::presets::PresetInputArgs {
-                        name,
-                        alerts,
-                        presence,
-                        duration,
-                        status,
-                        status_emoji,
-                        status_text,
+                    commands::grants::CreateGrantArgs {
+                        scope: Some(scope),
+                        session_id,
+                        workspace_ref,
+                        agent_id,
+                        permissions,
+                        duration_minutes,
+                        expires_at,
+                        source,
                     },
                     json,
                 )
                 .await
             }
-            Some(PresetsAction::Delete { id }) => {
-                commands::presets::delete(&api_url, &id, json).await
+            Some(GrantsAction::Revoke { id }) => {
+                commands::grants::revoke(&api_url, &id, json).await
+            }
+            Some(GrantsAction::RevokeMany {
+                active,
+                scope,
+                session_id,
+                workspace_ref,
+                agent_id,
+                source,
+            }) => {
+                commands::grants::revoke_many(
+                    &api_url,
+                    commands::grants::GrantsFilterArgs {
+                        active,
+                        scope,
+                        session_id,
+                        workspace_ref,
+                        agent_id,
+                        source,
+                    },
+                    json,
+                )
+                .await
+            }
+        },
+        Commands::Override { action } => match action {
+            None | Some(OverrideAction::Get) => commands::override_cmd::get(&api_url, json).await,
+            Some(OverrideAction::Set {
+                mode,
+                duration_minutes,
+                expires_at,
+                reason,
+            }) => {
+                commands::override_cmd::set(
+                    &api_url,
+                    Some(mode),
+                    duration_minutes,
+                    expires_at,
+                    reason,
+                    json,
+                )
+                .await
+            }
+            Some(OverrideAction::Clear { id, reason }) => {
+                commands::override_cmd::clear(&api_url, id, reason, json).await
             }
         },
         Commands::Preset { name } => commands::presets::activate(&api_url, &name, json).await,
@@ -674,8 +789,19 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             None | Some(VerdictSettingsAction::Get) => {
                 commands::verdict_settings::get(&api_url, json).await
             }
-            Some(VerdictSettingsAction::Set { mode_thresholds }) => {
-                commands::verdict_settings::set(&api_url, &mode_thresholds, json).await
+            Some(VerdictSettingsAction::Set {
+                thresholds,
+                default_wrap_up_mode,
+                wrap_up_threshold_minutes,
+            }) => {
+                commands::verdict_settings::set(
+                    &api_url,
+                    thresholds.as_deref(),
+                    default_wrap_up_mode.as_deref(),
+                    wrap_up_threshold_minutes,
+                    json,
+                )
+                .await
             }
         },
         Commands::Proposals { latest, verdict } => {
@@ -769,6 +895,8 @@ fn command_name(cmd: &Commands) -> &'static str {
         Commands::Availability { .. } => "availability",
         Commands::Windows { .. } => "windows",
         Commands::Presets { .. } => "presets",
+        Commands::Grants { .. } => "grants",
+        Commands::Override { .. } => "override",
         Commands::Preset { .. } => "preset",
         Commands::Digest { .. } => "digest",
         Commands::Autoresponder { .. } => "autoresponder",
