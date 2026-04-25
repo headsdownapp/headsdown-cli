@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use reqwest::Client;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
@@ -10,6 +11,7 @@ pub struct GraphQLClient {
     client: Client,
     endpoint: String,
     token: String,
+    actor_context: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -35,6 +37,15 @@ const INITIAL_BACKOFF_MS: u64 = 500;
 
 impl GraphQLClient {
     pub fn new(api_url: &str, token: &str) -> Self {
+        let workspace_ref = std::env::current_dir()
+            .ok()
+            .map(|path| path.display().to_string());
+        let actor_context = serde_json::json!({
+            "source": "headsdown-cli",
+            "agentId": "headsdown-cli",
+            "workspaceRef": workspace_ref,
+        });
+
         Self {
             client: Client::builder()
                 .timeout(Duration::from_secs(30))
@@ -42,6 +53,7 @@ impl GraphQLClient {
                 .unwrap_or_default(),
             endpoint: format!("{}/graphql", api_url),
             token: token.to_string(),
+            actor_context: Some(actor_context.to_string()),
         }
     }
 
@@ -81,12 +93,28 @@ impl GraphQLClient {
         Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Request failed after retries")))
     }
 
+    /// Execute a GraphQL query/mutation and deserialize the data payload into a typed structure.
+    pub async fn execute_typed<T: DeserializeOwned>(
+        &self,
+        query: &str,
+        variables: Option<Value>,
+    ) -> Result<T> {
+        let data = self.execute(query, variables).await?;
+        serde_json::from_value(data).context("Failed to decode API response shape")
+    }
+
     async fn send_request(&self, request: &GraphQLRequest) -> Result<Value> {
-        let response = self
+        let mut request_builder = self
             .client
             .post(&self.endpoint)
             .header("Authorization", format!("Bearer {}", self.token))
-            .header("Content-Type", "application/json")
+            .header("Content-Type", "application/json");
+
+        if let Some(actor_context) = &self.actor_context {
+            request_builder = request_builder.header("x-headsdown-actor-context", actor_context);
+        }
+
+        let response = request_builder
             .json(request)
             .send()
             .await
@@ -241,5 +269,35 @@ mod tests {
 
         let err = client.execute("query { fail }", None).await.unwrap_err();
         assert!(err.to_string().contains("No data returned"));
+    }
+
+    #[tokio::test]
+    async fn execute_typed_deserializes_data_payload() {
+        #[derive(Deserialize)]
+        struct TypedResponse {
+            profile: Profile,
+        }
+
+        #[derive(Deserialize)]
+        struct Profile {
+            name: String,
+        }
+
+        let (server, client) = setup().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {"profile": {"name": "Alice"}}
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let data: TypedResponse = client
+            .execute_typed("query { profile { name } }", None)
+            .await
+            .unwrap();
+        assert_eq!(data.profile.name, "Alice");
     }
 }

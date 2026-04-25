@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 use crate::auth;
 use crate::client::GraphQLClient;
@@ -8,14 +9,47 @@ const SUBMIT_PROPOSAL_MUTATION: &str = r#"
 mutation SubmitProposal($input: ProposalInput!) {
     submitProposal(input: $input) {
         decision
-        policy
-        policyStatus
         reason
         proposalId
         evaluatedAt
+        wrapUpGuidance {
+            active
+            deadlineAt
+            remainingMinutes
+            profile
+            source
+            reason
+            hints
+            thresholdMinutes
+            selectedMode
+        }
     }
 }
 "#;
+
+#[derive(Deserialize)]
+struct SubmitProposalResponse {
+    #[serde(rename = "submitProposal")]
+    submit_proposal: Verdict,
+}
+
+#[derive(Deserialize, Serialize)]
+struct Verdict {
+    decision: String,
+    reason: String,
+    #[serde(rename = "proposalId")]
+    proposal_id: String,
+    #[serde(rename = "wrapUpGuidance")]
+    wrap_up_guidance: Option<WrapUpGuidance>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct WrapUpGuidance {
+    #[serde(rename = "selectedMode")]
+    selected_mode: Option<String>,
+    #[serde(rename = "remainingMinutes")]
+    remaining_minutes: Option<i64>,
+}
 
 pub async fn run(
     api_url: &str,
@@ -45,23 +79,18 @@ pub async fn run(
     }
 
     let variables = serde_json::json!({ "input": input });
-    let data = client
-        .execute(SUBMIT_PROPOSAL_MUTATION, Some(variables))
+    let data: SubmitProposalResponse = client
+        .execute_typed(SUBMIT_PROPOSAL_MUTATION, Some(variables))
         .await?;
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&data["submitProposal"])?);
+        println!("{}", serde_json::to_string_pretty(&data.submit_proposal)?);
         return Ok(());
     }
 
-    let verdict = &data["submitProposal"];
-    let decision = verdict["decision"]
-        .as_str()
-        .unwrap_or("UNKNOWN")
-        .to_uppercase();
-    let policy = verdict["policy"].as_str().unwrap_or("UNKNOWN");
-    let policy_status = verdict["policyStatus"].as_str().unwrap_or("UNKNOWN");
-    let reason = verdict["reason"].as_str().unwrap_or("No reason provided");
+    let verdict = data.submit_proposal;
+    let decision = verdict.decision.to_uppercase();
+    let reason = verdict.reason;
 
     println!();
     println!(
@@ -70,9 +99,20 @@ pub async fn run(
         format::color_verdict(&decision)
     );
     println!();
-    println!("  {} {}", format::styled_dimmed("Policy:"), policy);
-    println!("  {} {}", format::styled_dimmed("State:"), policy_status);
     println!("  {} {}", format::styled_dimmed("Reason:"), reason);
+
+    if let Some(wrap_up_guidance) = verdict.wrap_up_guidance {
+        if let Some(mode) = wrap_up_guidance.selected_mode {
+            println!("  {} {}", format::styled_dimmed("Delivery mode:"), mode);
+        }
+        if let Some(minutes) = wrap_up_guidance.remaining_minutes {
+            println!(
+                "  {} {} min",
+                format::styled_dimmed("Attention window:"),
+                minutes
+            );
+        }
+    }
 
     // Show the proposal details
     println!();
