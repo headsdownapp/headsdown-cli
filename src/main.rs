@@ -8,6 +8,7 @@ mod telemetry;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
+use commands::integrations::IntegrationTool;
 use std::io;
 
 /// HeadsDown CLI — manage your availability from the terminal
@@ -148,11 +149,65 @@ enum Commands {
     /// Live-updating status dashboard
     Watch,
 
-    /// Check CLI health and connectivity
-    Doctor,
+    /// Install a HeadsDown integration for a local tool
+    Install {
+        /// Supported local tool to install HeadsDown into
+        tool: Option<IntegrationTool>,
 
-    /// Update the CLI to the latest version
-    Update,
+        /// Install HeadsDown into every detected supported tool
+        #[arg(long)]
+        all: bool,
+
+        /// Show planned changes without writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompts for bulk installs
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+
+    /// Check CLI health, connectivity, and integration health
+    Doctor {
+        /// Supported local tool to check
+        tool: Option<IntegrationTool>,
+
+        /// Check every supported tool, including missing tools
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Refresh installed HeadsDown integrations
+    Update {
+        /// Supported local tool to update
+        tool: Option<IntegrationTool>,
+
+        /// Update every detected supported tool
+        #[arg(long)]
+        all: bool,
+
+        /// Show planned changes without writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompts for bulk updates
+        #[arg(long, short = 'y')]
+        yes: bool,
+
+        /// Update the hd CLI binary itself instead of integrations
+        #[arg(long)]
+        cli: bool,
+    },
+
+    /// Remove a HeadsDown integration from a local tool
+    Remove {
+        /// Supported local tool to remove HeadsDown from
+        tool: IntegrationTool,
+
+        /// Show planned changes without writing files
+        #[arg(long)]
+        dry_run: bool,
+    },
 
     /// Manage git hook integration
     Hook {
@@ -824,8 +879,60 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             model,
         } => commands::verdict::run(&api_url, &description, files, minutes, model, json).await,
         Commands::Watch => commands::watch::run(&api_url).await,
-        Commands::Doctor => commands::doctor::run(&api_url, json).await,
-        Commands::Update => commands::update::run().await,
+        Commands::Install {
+            tool,
+            all,
+            dry_run,
+            yes,
+        } => commands::integrations::install(commands::integrations::IntegrationCommandOptions {
+            tool,
+            all,
+            dry_run,
+            yes,
+            json,
+        }),
+        Commands::Doctor { tool, all } => {
+            if tool.is_some() || all {
+                commands::integrations::doctor(commands::integrations::DoctorOptions {
+                    tool,
+                    all,
+                    json,
+                })
+            } else {
+                commands::doctor::run(&api_url, json).await
+            }
+        }
+        Commands::Update {
+            tool,
+            all,
+            dry_run,
+            yes,
+            cli,
+        } => {
+            if cli {
+                if tool.is_some() || all || dry_run || yes {
+                    anyhow::bail!("--cli cannot be combined with integration update options.");
+                }
+                commands::update::run().await
+            } else {
+                commands::integrations::update(commands::integrations::IntegrationCommandOptions {
+                    tool,
+                    all,
+                    dry_run,
+                    yes,
+                    json,
+                })
+            }
+        }
+        Commands::Remove { tool, dry_run } => {
+            commands::integrations::remove(commands::integrations::IntegrationCommandOptions {
+                tool: Some(tool),
+                all: false,
+                dry_run,
+                yes: true,
+                json,
+            })
+        }
         Commands::Hook { action } => match action {
             HookAction::Install => commands::hooks::install(),
             HookAction::Uninstall => commands::hooks::uninstall(),
@@ -910,8 +1017,10 @@ fn command_name(cmd: &Commands) -> &'static str {
         Commands::Limited { .. } => "limited",
         Commands::Verdict { .. } => "verdict",
         Commands::Watch => "watch",
-        Commands::Doctor => "doctor",
-        Commands::Update => "update",
+        Commands::Install { .. } => "install",
+        Commands::Doctor { .. } => "doctor",
+        Commands::Update { .. } => "update",
+        Commands::Remove { .. } => "remove",
         Commands::Hook { .. } => "hook",
         Commands::Telemetry { .. } => "telemetry",
         Commands::Calibration { .. } => "calibration",

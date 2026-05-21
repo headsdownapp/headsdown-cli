@@ -28,6 +28,11 @@ curl -fsSL https://headsdown.app/install.sh | sh
 # Authenticate (opens browser for approval)
 hd auth
 
+# Install HeadsDown into local agent tools
+hd install claude
+hd install --all
+hd doctor claude
+
 # Check your current status and availability
 hd status
 hd availability
@@ -93,8 +98,13 @@ hd watch
 | `hd limited [duration]` | Set mode to limited |
 | `hd verdict "desc"` | Submit a task proposal and get a verdict |
 | `hd watch` | Live-updating status dashboard |
-| `hd doctor` | Check CLI health and connectivity |
-| `hd update` | Self-update to the latest version |
+| `hd install <tool>` | Install the HeadsDown integration for a supported local tool, such as `claude`, `pi`, or `codex` |
+| `hd install --all` | Install HeadsDown integrations for every detected supported tool |
+| `hd doctor [tool]` | Check CLI health or local integration health |
+| `hd doctor --all` | Check every supported local integration without printing sensitive local content |
+| `hd update [tool]` | Refresh installed HeadsDown integrations, or use `--cli` to self-update the CLI binary |
+| `hd update --all` | Refresh HeadsDown integrations for detected supported tools |
+| `hd remove <tool>` | Remove the HeadsDown integration from a tool without uninstalling the tool itself |
 | `hd hook install` | Install git hooks (auto-busy on branch switch) |
 | `hd hook uninstall` | Remove git hooks |
 | `hd hook status` | Show git hook status |
@@ -140,6 +150,37 @@ hd alias set deep "busy 4h"
 hd focus
 hd standup
 ```
+
+## Local Agent Integrations
+
+Install means “install the HeadsDown integration for this tool,” not “install Claude Code, Pi, or Codex itself.” The installer only writes HeadsDown-owned integration artifacts and is safe to re-run:
+
+```sh
+hd install claude
+hd install pi
+hd install codex
+hd install --all --dry-run
+hd install --all --yes
+```
+
+Refresh or remove integrations with the same short command shape:
+
+```sh
+hd update
+hd update claude
+hd update --all --yes
+hd remove claude
+```
+
+Doctor reports derived health facts only:
+
+```sh
+hd doctor
+hd doctor claude
+hd doctor --all
+```
+
+Integration diagnostics do not print prompts, transcripts, source code, diffs, file paths, repository names, logs, tokens, or raw config content. Local integrations keep execution context local; hosted HeadsDown receives only structured routing metadata when hosted features are used.
 
 ## Git Hooks
 

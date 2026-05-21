@@ -118,12 +118,14 @@ mod tests {
     #[serial]
     fn save_then_load_round_trips() {
         with_temp_config(|| {
-            let mut cfg = Config::default();
-            cfg.default_duration = Some(120);
-            cfg.default_model = Some("gpt-4".to_string());
-            cfg.api_url = Some("https://custom.example.com".to_string());
-            cfg.telemetry.enabled = true;
-            cfg.calibration.enabled = false; // Test non-default value
+            let mut cfg = Config {
+                default_duration: Some(120),
+                default_model: Some("gpt-4".to_string()),
+                api_url: Some("https://custom.example.com".to_string()),
+                telemetry: TelemetryConfig { enabled: true },
+                calibration: CalibrationConfig { enabled: false },
+                ..Default::default()
+            };
             cfg.aliases
                 .insert("focus".to_string(), "busy 2h".to_string());
             cfg.aliases.insert("brb".to_string(), "offline".to_string());
@@ -154,9 +156,11 @@ mod tests {
     #[serial]
     fn update_modifies_existing_config() {
         with_temp_config(|| {
-            let mut cfg = Config::default();
-            cfg.default_duration = Some(60);
-            cfg.default_model = Some("claude".to_string());
+            let cfg = Config {
+                default_duration: Some(60),
+                default_model: Some("claude".to_string()),
+                ..Default::default()
+            };
             save(&cfg).unwrap();
 
             update(|c| c.default_duration = Some(120)).unwrap();
