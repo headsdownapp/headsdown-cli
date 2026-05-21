@@ -7,6 +7,7 @@ pub mod digest;
 pub mod doctor;
 pub mod grants;
 pub mod hooks;
+pub mod integrations;
 pub mod interrupt;
 pub mod mode;
 pub mod outcome;
